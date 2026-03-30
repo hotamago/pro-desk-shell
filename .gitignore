@@ -1,0 +1,14 @@
+build/
+dist/
+.cache/
+.pytest_cache/
+.mypy_cache/
+__pycache__/
+.venv/
+*.pyc
+
+rust/target/
+
+.idea/
+.vscode/
+.DS_Store

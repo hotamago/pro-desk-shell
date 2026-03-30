@@ -1,0 +1,16 @@
+[workspace]
+members = [
+    "crates/shell-core",
+    "crates/shell-hyprland",
+    "crates/shell-ui-bridge",
+]
+default-members = [
+    "crates/shell-core",
+    "crates/shell-hyprland",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+version = "0.1.0"
