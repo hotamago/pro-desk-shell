@@ -22,6 +22,7 @@ PACKAGE_GROUPS = {
             "cargo",
             "rustc",
             "qt6-qtbase-devel",
+            "qt6-qtbase-private-devel",
             "qt6-qtdeclarative-devel",
             "qt6-qtwayland-devel",
             "wayland-devel",

@@ -23,6 +23,7 @@ class PackageResolutionTests(unittest.TestCase):
 
         self.assertIsInstance(group, PackageGroup)
         self.assertIn("git", group.build)
+        self.assertIn("qt6-qtbase-private-devel", group.build)
         self.assertIn("layer-shell-qt-devel", group.build)
         self.assertIn("qt6-qtwayland", group.runtime)
         self.assertIn("hyprland", group.optional)
