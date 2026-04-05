@@ -27,6 +27,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
+      - name: Install bootstrap runtime
+        run: dnf install -y python3
+
       - name: Bootstrap Fedora dependencies
         run: ./devsh install --yes --deps-only
 
@@ -59,6 +62,9 @@ jobs:
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
+
+      - name: Install bootstrap runtime
+        run: dnf install -y python3
 
       - name: Bootstrap Fedora dependencies
         run: ./devsh install --yes --deps-only
