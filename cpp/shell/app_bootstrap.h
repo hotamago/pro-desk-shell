@@ -17,6 +17,7 @@ public:
 private:
     bool configure_layer_shell(QQuickWindow* window);
 
+    bool m_use_layer_shell = false;
     QString m_last_error;
 };
 

@@ -13,7 +13,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerWarnings)
 
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick WaylandClient)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 WaylandClient)
 find_package(LayerShellQt REQUIRED)
 
 if(POLICY QTP0001)
@@ -37,7 +37,7 @@ set(CRATE shell_ui_bridge)
 cxx_qt_import_crate(
     MANIFEST_PATH rust/Cargo.toml
     CRATES ${CRATE}
-    QT_MODULES Qt::Core Qt::Gui Qt::Qml Qt::Quick
+    QT_MODULES Qt::Core Qt::Gui Qt::Qml Qt::Quick Qt::QuickControls2
 )
 
 cxx_qt_import_qml_module(${CRATE}_qml_module
@@ -60,6 +60,7 @@ qt_add_qml_module(pro-desk-shell
     VERSION 1.0
     QML_FILES
         qml/App.qml
+        qml/components/DesktopTestBar.qml
         qml/components/PlaceholderBar.qml
 )
 
@@ -71,6 +72,7 @@ target_link_libraries(pro-desk-shell
         Qt::Gui
         Qt::Qml
         Qt::Quick
+        Qt::QuickControls2
         Qt::WaylandClient
 )
 

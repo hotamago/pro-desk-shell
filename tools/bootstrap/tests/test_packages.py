@@ -1,6 +1,7 @@
 import unittest
 from pathlib import Path
 import tempfile
+from unittest import mock
 
 from tools.bootstrap.packages.linux import (
     PackageGroup,
@@ -8,8 +9,10 @@ from tools.bootstrap.packages.linux import (
     package_group_for,
 )
 from tools.bootstrap.main import (
+    build_parser,
     dependency_install_command,
     layer_shell_build_support_present,
+    subprocess_environment,
 )
 from tools.bootstrap.platforms.base import DetectedPlatform
 
@@ -48,6 +51,40 @@ class PackageResolutionTests(unittest.TestCase):
                 DetectedPlatform(platform_id="arch", id_like=()),
                 assume_yes=True,
             )
+
+    def test_subprocess_environment_disables_ccache_when_cache_dir_is_not_writable(self) -> None:
+        with mock.patch("tools.bootstrap.main.shutil.which", return_value="/usr/bin/ccache"):
+            with mock.patch("tools.bootstrap.main.is_writable_path", return_value=False):
+                with mock.patch.dict("os.environ", {}, clear=True):
+                    with mock.patch("builtins.print"):
+                        env = subprocess_environment()
+
+        self.assertEqual(env["CCACHE_DISABLE"], "1")
+
+    def test_build_parser_accepts_release_build_type(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["build", "--build-type", "Release"])
+
+        self.assertEqual(args.command, "build")
+        self.assertEqual(args.build_type, "Release")
+
+    def test_install_parser_accepts_deps_only(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(["install", "--yes", "--deps-only"])
+
+        self.assertEqual(args.command, "install")
+        self.assertTrue(args.yes)
+        self.assertTrue(args.deps_only)
+
+    def test_fedora_install_command_skips_sudo_when_unavailable(self) -> None:
+        with mock.patch("tools.bootstrap.platforms.fedora.os.geteuid", return_value=1000):
+            with mock.patch("tools.bootstrap.platforms.fedora.shutil.which", return_value=None):
+                command = dependency_install_command(
+                    DetectedPlatform(platform_id="fedora", id_like=()),
+                    assume_yes=True,
+                )
+
+        self.assertEqual(command[:3], ["dnf", "install", "-y"])
 
 
 if __name__ == "__main__":

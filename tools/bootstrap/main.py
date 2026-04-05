@@ -26,6 +26,30 @@ from tools.bootstrap.platforms.gentoo import GentooAdapter
 
 DEFAULT_BUILD_DIR = ROOT_DIR / "build"
 DEFAULT_INSTALL_PREFIX = Path.home() / ".local"
+DEFAULT_BUILD_TYPE = "Debug"
+
+
+def is_writable_path(path: Path) -> bool:
+    current = path
+    while not current.exists() and current != current.parent:
+        current = current.parent
+
+    return os.access(current, os.W_OK)
+
+
+def subprocess_environment() -> dict[str, str]:
+    env = os.environ.copy()
+
+    if env.get("CCACHE_DISABLE") == "1" or shutil.which("ccache") is None:
+        return env
+
+    cache_dir = Path(env.get("CCACHE_DIR", Path.home() / ".cache/ccache"))
+    if is_writable_path(cache_dir):
+        return env
+
+    print(f"Disabling ccache because '{cache_dir}' is not writable.")
+    env["CCACHE_DISABLE"] = "1"
+    return env
 
 
 def parse_os_release(path: Path) -> dict[str, str]:
@@ -74,14 +98,19 @@ def run_command(
     cwd: Path = ROOT_DIR,
     dry_run: bool = False,
 ) -> None:
-    print(f"+ {shlex.join(command)}")
+    print(f"+ {shlex.join(command)}", flush=True)
     if dry_run:
         return
 
-    subprocess.run(command, cwd=cwd, check=True)
+    subprocess.run(command, cwd=cwd, check=True, env=subprocess_environment())
 
 
-def configure_project(build_dir: Path, install_prefix: Path, dry_run: bool) -> None:
+def configure_project(
+    build_dir: Path,
+    install_prefix: Path,
+    build_type: str,
+    dry_run: bool,
+) -> None:
     run_command(
         [
             "cmake",
@@ -89,7 +118,7 @@ def configure_project(build_dir: Path, install_prefix: Path, dry_run: bool) -> N
             str(ROOT_DIR),
             "-B",
             str(build_dir),
-            "-DCMAKE_BUILD_TYPE=Debug",
+            f"-DCMAKE_BUILD_TYPE={build_type}",
             f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
         ],
         dry_run=dry_run,
@@ -215,6 +244,12 @@ def build_parser() -> argparse.ArgumentParser:
             action="store_true",
             help="Print commands without executing them.",
         )
+        command_parser.add_argument(
+            "--build-type",
+            default=DEFAULT_BUILD_TYPE,
+            choices=("Debug", "Release", "RelWithDebInfo", "MinSizeRel"),
+            help="CMake build type to configure.",
+        )
 
     install_parser = subparsers.add_parser("install", help="Install dependencies, build, and install.")
     add_common_flags(install_parser)
@@ -223,6 +258,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--skip-deps",
         action="store_true",
         help="Skip the system package installation step.",
+    )
+    install_parser.add_argument(
+        "--deps-only",
+        action="store_true",
+        help="Install system dependencies only, without configuring, building, or installing the project.",
     )
 
     build_parser_cmd = subparsers.add_parser("build", help="Configure and build the project.")
@@ -274,19 +314,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "install":
         if not args.skip_deps:
             install_dependencies(platform, assume_yes=args.yes, dry_run=args.dry_run)
-        configure_project(args.build_dir, args.prefix, args.dry_run)
+        if args.deps_only:
+            return 0
+        configure_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
         build_project(args.build_dir, args.dry_run)
         install_project(args.build_dir, args.dry_run)
         return 0
 
     if args.command == "build":
-        configure_project(args.build_dir, args.prefix, args.dry_run)
+        configure_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
         build_project(args.build_dir, args.dry_run)
         return 0
 
     if args.command == "run":
         if not args.skip_build:
-            configure_project(args.build_dir, args.prefix, args.dry_run)
+            configure_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
             build_project(args.build_dir, args.dry_run)
         run_binary(args.build_dir, args.dry_run)
         return 0
@@ -296,7 +338,7 @@ def main(argv: list[str] | None = None) -> int:
             update_checkout(args.dry_run)
         if not args.skip_deps:
             install_dependencies(platform, assume_yes=args.yes, dry_run=args.dry_run)
-        configure_project(args.build_dir, args.prefix, args.dry_run)
+        configure_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
         build_project(args.build_dir, args.dry_run)
         install_project(args.build_dir, args.dry_run)
         return 0

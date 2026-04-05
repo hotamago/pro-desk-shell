@@ -1,0 +1,42 @@
+name: Main CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: main-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate Bootstrap And Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: fedora:43
+    env:
+      CCACHE_DISABLE: "1"
+      CARGO_TERM_COLOR: always
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Bootstrap Fedora dependencies
+        run: ./devsh install --yes --deps-only
+
+      - name: Run bootstrap tests
+        run: python3 -m unittest discover -s tools/bootstrap/tests
+
+      - name: Run Rust tests
+        run: cargo test --locked --manifest-path rust/Cargo.toml
+
+      - name: Validate desktop shell build
+        run: ./devsh build
