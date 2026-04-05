@@ -6,6 +6,32 @@ Item {
     id: root
 
     required property var shellState
+    readonly property var feed: [
+        {
+            title: root.shellState.latest_notification_title.length > 0 ? root.shellState.latest_notification_title : "Shell ready",
+            body: root.shellState.latest_notification_body.length > 0 ? root.shellState.latest_notification_body : "Runtime notifications will land here as the shell gets richer services.",
+            accent: "#59d3ff",
+            tag: "Latest"
+        },
+        {
+            title: "Network status",
+            body: root.shellState.network_name + " / " + root.shellState.network_state,
+            accent: "#7ef0bc",
+            tag: "Network"
+        },
+        {
+            title: "Power state",
+            body: root.shellState.battery_percent + "% / " + (root.shellState.battery_charging ? "charging" : "steady drain"),
+            accent: "#f0d18d",
+            tag: "Battery"
+        },
+        {
+            title: "Current focus",
+            body: root.shellState.active_window_title,
+            accent: "#ffaf72",
+            tag: "Workspace"
+        }
+    ]
 
     ShellTheme {
         id: theme
@@ -13,9 +39,11 @@ Item {
 
     SurfaceCard {
         anchors.fill: parent
-        tintTop: "#182433"
-        tintBottom: "#111922"
-        borderTint: "#2a465c"
+        tintTop: "#15283c"
+        tintBottom: "#0d1721"
+        borderTint: "#325a79"
+        glowTint: root.shellState.accent_color
+        glowStrength: 0.11
 
         ColumnLayout {
             anchors.fill: parent
@@ -23,6 +51,7 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 12
 
                 ColumnLayout {
                     Layout.fillWidth: true
@@ -31,42 +60,51 @@ Item {
                         text: "Notification Center"
                         color: theme.textStrong
                         font.family: theme.titleFont
-                        font.pixelSize: 19
-                        font.weight: Font.DemiBold
+                        font.pixelSize: 24
+                        font.weight: Font.Black
                     }
 
                     Text {
                         text: root.shellState.notification_count + " runtime notices queued"
-                        color: theme.textDim
+                        color: theme.textSoft
                         font.family: theme.bodyFont
                         font.pixelSize: 11
                     }
                 }
 
-                Button {
+                ShellButton {
+                    text: "Refresh"
+                    compact: true
+                    fill: "#173046"
+                    borderColor: "#4a7ea3"
+                    onClicked: root.shellState.refresh_shell()
+                }
+
+                ShellButton {
                     text: "Close"
+                    compact: true
                     onClicked: root.shellState.toggle_notifications()
                 }
             }
 
             Rectangle {
                 Layout.fillWidth: true
-                radius: 20
-                color: "#13202d"
+                radius: 24
+                color: "#132436"
                 border.width: 1
-                border.color: "#284257"
-                implicitHeight: 122
+                border.color: "#31597a"
+                implicitHeight: 118
 
                 ColumnLayout {
                     anchors.fill: parent
                     anchors.margins: 16
-                    spacing: 4
+                    spacing: 6
 
                     Text {
                         text: root.shellState.latest_notification_title
                         color: theme.textStrong
                         font.family: theme.titleFont
-                        font.pixelSize: 16
+                        font.pixelSize: 18
                         font.weight: Font.DemiBold
                     }
 
@@ -80,65 +118,104 @@ Item {
                 }
             }
 
-            Rectangle {
+            ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: 20
-                color: "#111a25"
-                border.width: 1
-                border.color: "#243a4c"
+                clip: true
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 16
+                Column {
+                    width: parent.width
                     spacing: 10
 
-                    Text {
-                        text: "Signal board"
-                        color: theme.textStrong
-                        font.family: theme.bodyFont
-                        font.pixelSize: 14
-                        font.weight: Font.DemiBold
-                    }
+                    Repeater {
+                        model: root.feed
 
-                    Text {
-                        text: "Compositor: " + root.shellState.compositor_name
-                        color: theme.textSoft
-                        font.family: theme.bodyFont
-                        font.pixelSize: 12
-                    }
+                        delegate: Rectangle {
+                            required property var modelData
 
-                    Text {
-                        text: "Workspace: " + root.shellState.active_workspace
-                        color: theme.textSoft
-                        font.family: theme.bodyFont
-                        font.pixelSize: 12
-                    }
+                            width: parent.width
+                            radius: 22
+                            color: "#101a26"
+                            border.width: 1
+                            border.color: "#234155"
+                            implicitHeight: 104
 
-                    Text {
-                        text: "Config: " + root.shellState.config_path
-                        color: theme.textDim
-                        font.family: theme.monoFont
-                        font.pixelSize: 10
-                        wrapMode: Text.WrapAnywhere
-                    }
+                            Rectangle {
+                                anchors.left: parent.left
+                                anchors.top: parent.top
+                                anchors.bottom: parent.bottom
+                                width: 6
+                                radius: 3
+                                color: modelData.accent
+                            }
 
-                    Text {
-                        text: "State: " + root.shellState.state_path
-                        color: theme.textDim
-                        font.family: theme.monoFont
-                        font.pixelSize: 10
-                        wrapMode: Text.WrapAnywhere
-                    }
+                            ColumnLayout {
+                                anchors.fill: parent
+                                anchors.margins: 16
+                                anchors.leftMargin: 20
+                                spacing: 4
 
-                    Item {
-                        Layout.fillHeight: true
-                    }
+                                RowLayout {
+                                    Layout.fillWidth: true
 
-                    Button {
-                        text: "Refresh shell snapshot"
-                        onClicked: root.shellState.refresh_shell()
+                                    Text {
+                                        text: modelData.tag
+                                        color: theme.textDim
+                                        font.family: theme.monoFont
+                                        font.pixelSize: 10
+                                    }
+
+                                    Item {
+                                        Layout.fillWidth: true
+                                    }
+
+                                    Text {
+                                        text: root.shellState.active_workspace
+                                        color: theme.textFaint
+                                        font.family: theme.monoFont
+                                        font.pixelSize: 10
+                                    }
+                                }
+
+                                Text {
+                                    text: modelData.title
+                                    color: theme.textStrong
+                                    font.family: theme.titleFont
+                                    font.pixelSize: 15
+                                    font.weight: Font.DemiBold
+                                }
+
+                                Text {
+                                    text: modelData.body
+                                    color: theme.textSoft
+                                    font.family: theme.bodyFont
+                                    font.pixelSize: 11
+                                    wrapMode: Text.Wrap
+                                }
+                            }
+                        }
                     }
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                ShellButton {
+                    text: "Controls"
+                    Layout.fillWidth: true
+                    fill: "#1f3023"
+                    borderColor: "#4a7858"
+                    onClicked: root.shellState.toggle_quick_settings()
+                }
+
+                ShellButton {
+                    text: "Session"
+                    Layout.fillWidth: true
+                    fill: "#321f24"
+                    borderColor: "#86545f"
+                    onClicked: root.shellState.toggle_session()
                 }
             }
         }

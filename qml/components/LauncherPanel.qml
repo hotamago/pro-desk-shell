@@ -10,6 +10,12 @@ Item {
 
     readonly property var catalog: [
         {
+            label: "Toggle overview",
+            description: "Open the larger shell dashboard for workspaces, context, and actions.",
+            keywords: "overview dashboard workspaces scene",
+            actionId: "overview"
+        },
+        {
             label: "Toggle quick settings",
             description: "Open the control rail for audio, brightness, and shell prefs.",
             keywords: "quick settings audio brightness network",
@@ -52,7 +58,9 @@ Item {
     }
 
     function runAction(actionId) {
-        if (actionId === "quick") {
+        if (actionId === "overview") {
+            root.shellState.toggle_overview()
+        } else if (actionId === "quick") {
             root.shellState.toggle_quick_settings()
         } else if (actionId === "notifications") {
             root.shellState.toggle_notifications()
@@ -71,9 +79,11 @@ Item {
 
     SurfaceCard {
         anchors.fill: parent
-        tintTop: "#162333"
-        tintBottom: "#0d1620"
-        borderTint: "#30516b"
+        tintTop: "#15283d"
+        tintBottom: "#0c1520"
+        borderTint: "#355e81"
+        glowTint: root.shellState.accent_color
+        glowStrength: 0.12
         padding: 22
 
         ColumnLayout {
@@ -82,169 +92,325 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: 14
 
-                TextField {
+                ColumnLayout {
+                    spacing: 2
+
+                    Text {
+                        text: "Launcher"
+                        color: theme.textStrong
+                        font.family: theme.titleFont
+                        font.pixelSize: 24
+                        font.weight: Font.Black
+                    }
+
+                    Text {
+                        text: "A compact command palette for shell surfaces and runtime actions."
+                        color: theme.textSoft
+                        font.family: theme.bodyFont
+                        font.pixelSize: 11
+                    }
+                }
+
+                ShellTextField {
                     id: searchField
 
-                    Layout.fillWidth: true
+                    Layout.preferredWidth: 390
                     placeholderText: "Search shell actions, integrations, and surfaces"
                     text: root.query
                     onTextChanged: root.query = text.toLowerCase()
                     Component.onCompleted: forceActiveFocus()
                 }
 
-                Button {
+                ShellButton {
                     text: "Close"
+                    compact: true
                     onClicked: root.shellState.toggle_launcher()
                 }
             }
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                Layout.fillHeight: true
+                spacing: 16
 
                 Rectangle {
                     Layout.fillWidth: true
-                    radius: 20
-                    color: "#13202c"
+                    Layout.fillHeight: true
+                    radius: 24
+                    color: "#0f1b28"
                     border.width: 1
-                    border.color: "#264154"
-                    implicitHeight: 88
+                    border.color: "#2b4d69"
 
                     ColumnLayout {
                         anchors.fill: parent
                         anchors.margins: 16
-                        spacing: 4
+                        spacing: 12
 
-                        Text {
-                            text: root.shellState.active_window_title
-                            color: theme.textStrong
-                            font.family: theme.titleFont
-                            font.pixelSize: 17
-                            font.weight: Font.DemiBold
-                            elide: Text.ElideRight
-                        }
-
-                        Text {
-                            text: root.shellState.status_line
-                            color: theme.textSoft
-                            font.family: theme.bodyFont
-                            font.pixelSize: 11
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-
-                Rectangle {
-                    radius: 20
-                    color: "#1c2b1d"
-                    border.width: 1
-                    border.color: "#3c7256"
-                    implicitWidth: 170
-                    implicitHeight: 88
-
-                    ColumnLayout {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        spacing: 2
-
-                        Text {
-                            text: root.shellState.network_name
-                            color: theme.textStrong
-                            font.family: theme.bodyFont
-                            font.pixelSize: 14
-                            font.weight: Font.DemiBold
-                        }
-
-                        Text {
-                            text: "Battery " + root.shellState.battery_percent + "% • Volume " + root.shellState.volume_percent + "%"
-                            color: theme.textSoft
-                            font.family: theme.monoFont
-                            font.pixelSize: 10
-                            wrapMode: Text.Wrap
-                        }
-                    }
-                }
-            }
-
-            ScrollView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-
-                Column {
-                    width: parent.width
-                    spacing: 12
-
-                    Repeater {
-                        model: root.catalog
-
-                        delegate: Rectangle {
-                            required property var modelData
-
-                            readonly property bool matches: root.query.length === 0
-                                                             || modelData.label.toLowerCase().indexOf(root.query) >= 0
-                                                             || modelData.description.toLowerCase().indexOf(root.query) >= 0
-                                                             || modelData.keywords.indexOf(root.query) >= 0
-
-                            visible: matches
-                            width: parent.width
+                        Rectangle {
+                            Layout.fillWidth: true
                             radius: 20
-                            color: "#121c28"
+                            color: "#14283c"
                             border.width: 1
-                            border.color: matches ? "#25455d" : "#182736"
-                            implicitHeight: 94
+                            border.color: "#315777"
+                            implicitHeight: 88
 
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                onClicked: root.runAction(parent.modelData.actionId)
-                            }
-
-                            RowLayout {
+                            ColumnLayout {
                                 anchors.fill: parent
                                 anchors.margins: 16
-                                spacing: 16
+                                spacing: 4
 
-                                Rectangle {
-                                    Layout.preferredWidth: 44
-                                    Layout.preferredHeight: 44
-                                    radius: 15
-                                    color: "#203244"
-                                    border.width: 1
-                                    border.color: "#4a84a6"
-
-                                    Text {
-                                        anchors.centerIn: parent
-                                        text: "→"
-                                        color: theme.surfaceHighlight
-                                        font.family: theme.titleFont
-                                        font.pixelSize: 20
-                                        font.weight: Font.Bold
-                                    }
+                                Text {
+                                    text: root.shellState.active_window_title
+                                    color: theme.textStrong
+                                    font.family: theme.titleFont
+                                    font.pixelSize: 18
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
                                 }
 
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 2
+                                Text {
+                                    text: root.shellState.status_line
+                                    color: theme.textSoft
+                                    font.family: theme.bodyFont
+                                    font.pixelSize: 11
+                                    wrapMode: Text.Wrap
+                                }
+                            }
+                        }
 
-                                    Text {
-                                        text: modelData.label
-                                        color: theme.textStrong
-                                        font.family: theme.titleFont
-                                        font.pixelSize: 15
-                                        font.weight: Font.DemiBold
-                                    }
+                        Text {
+                            text: root.query.length > 0 ? "Results" : "Pinned actions"
+                            color: theme.textDim
+                            font.family: theme.bodyFont
+                            font.pixelSize: 11
+                        }
 
-                                    Text {
-                                        text: modelData.description
-                                        color: theme.textSoft
-                                        font.family: theme.bodyFont
-                                        font.pixelSize: 11
-                                        wrapMode: Text.Wrap
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            clip: true
+
+                            Column {
+                                width: parent.width
+                                spacing: 10
+
+                                Repeater {
+                                    model: root.catalog
+
+                                    delegate: Rectangle {
+                                        required property var modelData
+
+                                        readonly property bool matches: root.query.length === 0
+                                                                         || modelData.label.toLowerCase().indexOf(root.query) >= 0
+                                                                         || modelData.description.toLowerCase().indexOf(root.query) >= 0
+                                                                         || modelData.keywords.indexOf(root.query) >= 0
+
+                                        visible: matches
+                                        width: parent.width
+                                        radius: 20
+                                        color: "#132435"
+                                        border.width: 1
+                                        border.color: "#315476"
+                                        implicitHeight: 90
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            onClicked: root.runAction(parent.modelData.actionId)
+                                        }
+
+                                        RowLayout {
+                                            anchors.fill: parent
+                                            anchors.margins: 16
+                                            spacing: 14
+
+                                            Rectangle {
+                                                Layout.preferredWidth: 42
+                                                Layout.preferredHeight: 42
+                                                radius: 14
+                                                color: "#18364d"
+                                                border.width: 1
+                                                border.color: "#4b86ab"
+
+                                                Text {
+                                                    anchors.centerIn: parent
+                                                    text: (index + 1).toString()
+                                                    color: theme.surfaceHighlight
+                                                    font.family: theme.monoFont
+                                                    font.pixelSize: 14
+                                                    font.weight: Font.Bold
+                                                }
+                                            }
+
+                                            ColumnLayout {
+                                                Layout.fillWidth: true
+                                                spacing: 2
+
+                                                Text {
+                                                    text: modelData.label
+                                                    color: theme.textStrong
+                                                    font.family: theme.titleFont
+                                                    font.pixelSize: 15
+                                                    font.weight: Font.DemiBold
+                                                }
+
+                                                Text {
+                                                    text: modelData.description
+                                                    color: theme.textSoft
+                                                    font.family: theme.bodyFont
+                                                    font.pixelSize: 11
+                                                    wrapMode: Text.Wrap
+                                                }
+                                            }
+                                        }
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.preferredWidth: 272
+                    Layout.fillHeight: true
+                    spacing: 12
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: 24
+                        color: "#112030"
+                        border.width: 1
+                        border.color: "#29475f"
+                        implicitHeight: 124
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 6
+
+                            Text {
+                                text: root.shellState.network_name
+                                color: theme.textStrong
+                                font.family: theme.titleFont
+                                font.pixelSize: 18
+                                font.weight: Font.DemiBold
+                            }
+
+                            Text {
+                                text: "Battery " + root.shellState.battery_percent + "%  /  Volume " + root.shellState.volume_percent + "%"
+                                color: theme.textSoft
+                                font.family: theme.bodyFont
+                                font.pixelSize: 11
+                                wrapMode: Text.Wrap
+                            }
+
+                            Text {
+                                text: root.shellState.media_title.length > 0 ? root.shellState.media_title : "No media session"
+                                color: theme.textDim
+                                font.family: theme.bodyFont
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: 24
+                        color: "#0f1a26"
+                        border.width: 1
+                        border.color: "#243d52"
+                        implicitHeight: 178
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 10
+
+                            Text {
+                                text: "Pinned shortcuts"
+                                color: theme.textStrong
+                                font.family: theme.titleFont
+                                font.pixelSize: 16
+                                font.weight: Font.DemiBold
+                            }
+
+                            ShellButton {
+                                text: "Overview"
+                                Layout.fillWidth: true
+                                onClicked: root.runAction("overview")
+                            }
+
+                            ShellButton {
+                                text: "Controls"
+                                Layout.fillWidth: true
+                                fill: "#1f3024"
+                                borderColor: "#4d795a"
+                                onClicked: root.runAction("quick")
+                            }
+
+                            ShellButton {
+                                text: "Settings"
+                                Layout.fillWidth: true
+                                fill: "#192f43"
+                                borderColor: "#4a7799"
+                                onClicked: root.runAction("settings")
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        radius: 24
+                        color: "#0d1621"
+                        border.width: 1
+                        border.color: "#21384a"
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 10
+
+                            Text {
+                                text: "Theme pulse"
+                                color: theme.textStrong
+                                font.family: theme.titleFont
+                                font.pixelSize: 16
+                                font.weight: Font.DemiBold
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 110
+                                radius: 20
+                                gradient: Gradient {
+                                    GradientStop { position: 0.0; color: root.shellState.accent_color }
+                                    GradientStop { position: 0.5; color: root.shellState.accent_color_secondary }
+                                    GradientStop { position: 1.0; color: root.shellState.accent_color_tertiary }
+                                }
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.bottom: parent.bottom
+                                    anchors.leftMargin: 14
+                                    anchors.bottomMargin: 14
+                                    text: root.shellState.theme_name
+                                    color: "#09131b"
+                                    font.family: theme.titleFont
+                                    font.pixelSize: 18
+                                    font.weight: Font.Black
+                                }
+                            }
+
+                            Text {
+                                text: "Jump to wallpaper tools to keep the shell language cohesive."
+                                color: theme.textDim
+                                font.family: theme.bodyFont
+                                font.pixelSize: 11
+                                wrapMode: Text.Wrap
                             }
                         }
                     }

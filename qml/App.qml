@@ -48,12 +48,30 @@ ApplicationWindow {
         modality: Qt.NonModal
         flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
         color: "transparent"
-        width: 920
-        height: 620
+        width: 940
+        height: 640
         x: root.x + Math.max(24, (root.width - width) / 2)
         y: root.y + root.height + 22
 
         LauncherPanel {
+            anchors.fill: parent
+            shellState: shellState
+        }
+    }
+
+    Window {
+        id: overviewWindow
+        transientParent: root
+        visible: shellState.overview_open
+        modality: Qt.NonModal
+        flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+        color: "transparent"
+        width: 1240
+        height: 760
+        x: root.x + Math.max(20, (root.width - width) / 2)
+        y: root.y + root.height + 24
+
+        OverviewPanel {
             anchors.fill: parent
             shellState: shellState
         }
@@ -66,8 +84,8 @@ ApplicationWindow {
         modality: Qt.NonModal
         flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
         color: "transparent"
-        width: 380
-        height: 540
+        width: 430
+        height: 640
         x: root.x + Math.max(24, root.width - width - 30)
         y: root.y + root.height + 18
 
@@ -84,8 +102,8 @@ ApplicationWindow {
         modality: Qt.NonModal
         flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
         color: "transparent"
-        width: 400
-        height: 460
+        width: 430
+        height: 620
         x: root.x + Math.max(24, root.width - width - 430)
         y: root.y + root.height + 18
 
@@ -102,8 +120,8 @@ ApplicationWindow {
         modality: Qt.NonModal
         flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
         color: "transparent"
-        width: 420
-        height: 500
+        width: 520
+        height: 620
         x: root.x + 26
         y: root.y + root.height + 18
 
@@ -120,8 +138,8 @@ ApplicationWindow {
         modality: Qt.NonModal
         flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
         color: "transparent"
-        width: 520
-        height: 300
+        width: 760
+        height: 500
         x: root.x + Math.max(24, (root.width - width) / 2)
         y: root.y + root.height + 48
 

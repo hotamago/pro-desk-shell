@@ -13,9 +13,11 @@ Item {
 
     SurfaceCard {
         anchors.fill: parent
-        tintTop: "#172433"
-        tintBottom: "#0f1720"
-        borderTint: "#2b485f"
+        tintTop: "#16293d"
+        tintBottom: "#0c1520"
+        borderTint: "#335c7c"
+        glowTint: root.shellState.accent_color
+        glowStrength: 0.12
 
         ColumnLayout {
             anchors.fill: parent
@@ -23,16 +25,17 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 12
 
                 ColumnLayout {
                     Layout.fillWidth: true
 
                     Text {
-                        text: "Wallpaper + Theme"
+                        text: "Wallpaper Studio"
                         color: theme.textStrong
                         font.family: theme.titleFont
-                        font.pixelSize: 19
-                        font.weight: Font.DemiBold
+                        font.pixelSize: 24
+                        font.weight: Font.Black
                     }
 
                     Text {
@@ -43,49 +46,144 @@ Item {
                     }
                 }
 
-                Button {
+                ShellButton {
                     text: "Close"
+                    compact: true
                     onClicked: root.shellState.toggle_wallpaper_selector()
                 }
             }
 
-            Rectangle {
+            RowLayout {
                 Layout.fillWidth: true
-                implicitHeight: 148
-                radius: 22
-                border.width: 1
-                border.color: "#35556f"
-                gradient: Gradient {
-                    GradientStop {
-                        position: 0.0
-                        color: root.shellState.accent_color
+                spacing: 14
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    radius: 26
+                    border.width: 1
+                    border.color: "#375977"
+                    implicitHeight: 186
+                    gradient: Gradient {
+                        GradientStop { position: 0.0; color: root.shellState.accent_color }
+                        GradientStop { position: 0.55; color: root.shellState.accent_color_secondary }
+                        GradientStop { position: 1.0; color: root.shellState.accent_color_tertiary }
                     }
 
-                    GradientStop {
-                        position: 0.55
-                        color: root.shellState.accent_color_secondary
-                    }
+                    ColumnLayout {
+                        anchors.fill: parent
+                        anchors.margins: 18
+                        spacing: 2
 
-                    GradientStop {
-                        position: 1.0
-                        color: root.shellState.accent_color_tertiary
+                        Text {
+                            text: root.shellState.theme_name
+                            color: "#09131b"
+                            font.family: theme.titleFont
+                            font.pixelSize: 28
+                            font.weight: Font.Black
+                        }
+
+                        Text {
+                            text: root.shellState.wallpaper_path.length > 0 ? root.shellState.wallpaper_path : "No wallpaper path configured yet"
+                            color: "#14212d"
+                            font.family: theme.bodyFont
+                            font.pixelSize: 11
+                            wrapMode: Text.Wrap
+                        }
+
+                        Item {
+                            Layout.fillHeight: true
+                        }
+
+                        Text {
+                            text: "Theme preview"
+                            color: "#162331"
+                            font.family: theme.monoFont
+                            font.pixelSize: 10
+                        }
                     }
                 }
 
-                Text {
-                    anchors.left: parent.left
-                    anchors.leftMargin: 18
-                    anchors.bottom: parent.bottom
-                    anchors.bottomMargin: 18
-                    text: root.shellState.theme_name
-                    color: "#09131b"
-                    font.family: theme.titleFont
-                    font.pixelSize: 22
-                    font.weight: Font.Black
+                ColumnLayout {
+                    Layout.preferredWidth: 170
+                    spacing: 10
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: 20
+                        color: "#132334"
+                        border.width: 1
+                        border.color: "#294a64"
+                        implicitHeight: 54
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "Accent 1"
+                            color: theme.textStrong
+                            font.family: theme.bodyFont
+                            font.pixelSize: 12
+                            font.weight: Font.DemiBold
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: 20
+                        color: root.shellState.accent_color_secondary
+                        border.width: 1
+                        border.color: "#8b6946"
+                        implicitHeight: 54
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: 20
+                        color: root.shellState.accent_color_tertiary
+                        border.width: 1
+                        border.color: "#4c8a66"
+                        implicitHeight: 54
+                    }
                 }
             }
 
-            TextField {
+            GridLayout {
+                Layout.fillWidth: true
+                columns: 3
+                columnSpacing: 10
+                rowSpacing: 10
+
+                ShellButton {
+                    text: "ii-horizon"
+                    Layout.fillWidth: true
+                    onClicked: {
+                        root.shellState.set_theme_name_value("ii-horizon")
+                        root.shellState.set_accent_color_value("#56d6ff")
+                    }
+                }
+
+                ShellButton {
+                    text: "ii-sunset"
+                    Layout.fillWidth: true
+                    fill: "#36261e"
+                    borderColor: "#8c6645"
+                    onClicked: {
+                        root.shellState.set_theme_name_value("ii-sunset")
+                        root.shellState.set_accent_color_value("#ff9163")
+                    }
+                }
+
+                ShellButton {
+                    text: "ii-forest"
+                    Layout.fillWidth: true
+                    fill: "#223125"
+                    borderColor: "#4d8c64"
+                    onClicked: {
+                        root.shellState.set_theme_name_value("ii-forest")
+                        root.shellState.set_accent_color_value("#53d997")
+                    }
+                }
+            }
+
+            ShellTextField {
                 id: wallpaperPathField
 
                 Layout.fillWidth: true
@@ -97,64 +195,44 @@ Item {
                 Layout.fillWidth: true
                 spacing: 10
 
-                Button {
-                    text: "Save path"
+                ShellButton {
+                    text: "Save wallpaper path"
                     onClicked: root.shellState.set_wallpaper_path_value(wallpaperPathField.text)
                 }
 
-                Button {
-                    text: "ii-horizon"
-                    onClicked: {
-                        root.shellState.set_theme_name_value("ii-horizon")
-                        root.shellState.set_accent_color_value("#56d6ff")
-                    }
+                ShellTextField {
+                    id: themeField
+
+                    Layout.fillWidth: true
+                    placeholderText: "ii-horizon"
+                    text: root.shellState.theme_name
                 }
-
-                Button {
-                    text: "ii-sunset"
-                    onClicked: {
-                        root.shellState.set_theme_name_value("ii-sunset")
-                        root.shellState.set_accent_color_value("#ff9163")
-                    }
-                }
-
-                Button {
-                    text: "ii-forest"
-                    onClicked: {
-                        root.shellState.set_theme_name_value("ii-forest")
-                        root.shellState.set_accent_color_value("#53d997")
-                    }
-                }
-            }
-
-            TextField {
-                id: accentField
-
-                Layout.fillWidth: true
-                placeholderText: "#56d6ff"
-                text: root.shellState.accent_color
             }
 
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 10
 
-                Button {
+                ShellTextField {
+                    id: accentField
+
+                    Layout.fillWidth: true
+                    placeholderText: "#56d6ff"
+                    text: root.shellState.accent_color
+                }
+
+                ShellButton {
                     text: "Save accent"
                     onClicked: root.shellState.set_accent_color_value(accentField.text)
                 }
-
-                Button {
-                    text: "Save theme name"
-                    onClicked: root.shellState.set_theme_name_value(themeField.text)
-                }
             }
 
-            TextField {
-                id: themeField
-
+            ShellButton {
+                text: "Save theme name"
                 Layout.fillWidth: true
-                placeholderText: "ii-horizon"
-                text: root.shellState.theme_name
+                fill: "#183148"
+                borderColor: "#497ea6"
+                onClicked: root.shellState.set_theme_name_value(themeField.text)
             }
 
             Item {

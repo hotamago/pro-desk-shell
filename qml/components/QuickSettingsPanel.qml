@@ -6,16 +6,26 @@ Item {
     id: root
 
     required property var shellState
+    property date now: new Date()
 
     ShellTheme {
         id: theme
     }
 
+    Timer {
+        interval: 1000
+        repeat: true
+        running: true
+        onTriggered: root.now = new Date()
+    }
+
     SurfaceCard {
         anchors.fill: parent
-        tintTop: "#172432"
-        tintBottom: "#0f1822"
-        borderTint: "#29445a"
+        tintTop: "#15283c"
+        tintBottom: "#0d1721"
+        borderTint: "#315878"
+        glowTint: root.shellState.accent_color
+        glowStrength: 0.12
 
         ColumnLayout {
             anchors.fill: parent
@@ -23,207 +33,285 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
+                spacing: 12
 
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
 
                     Text {
-                        text: "Quick Settings"
+                        text: "Control Center"
                         color: theme.textStrong
                         font.family: theme.titleFont
-                        font.pixelSize: 20
-                        font.weight: Font.DemiBold
+                        font.pixelSize: 24
+                        font.weight: Font.Black
                     }
 
                     Text {
-                        text: "Runtime signals from Rust plus persisted shell preferences."
-                        color: theme.textDim
+                        text: root.shellState.network_name + " / " + root.shellState.network_state + " / " + Qt.formatDateTime(root.now, "ddd dd MMM  hh:mm")
+                        color: theme.textSoft
                         font.family: theme.bodyFont
                         font.pixelSize: 11
                     }
                 }
 
-                Button {
+                ShellButton {
                     text: "Close"
+                    compact: true
                     onClicked: root.shellState.toggle_quick_settings()
-                }
-            }
-
-            Rectangle {
-                Layout.fillWidth: true
-                radius: 18
-                color: "#12202d"
-                border.width: 1
-                border.color: "#243c50"
-                implicitHeight: 132
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 12
-
-                    Text {
-                        text: root.shellState.network_name + " • " + root.shellState.network_state
-                        color: theme.textStrong
-                        font.family: theme.bodyFont
-                        font.pixelSize: 14
-                        font.weight: Font.DemiBold
-                    }
-
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-
-                        Text {
-                            text: "Volume " + root.shellState.volume_percent + "%"
-                            color: theme.textSoft
-                            font.family: theme.bodyFont
-                            font.pixelSize: 11
-                        }
-
-                        Slider {
-                            Layout.fillWidth: true
-                            enabled: false
-                            from: 0
-                            to: 100
-                            value: root.shellState.volume_percent
-                        }
-
-                        Text {
-                            text: "Brightness " + root.shellState.brightness_percent + "%"
-                            color: theme.textSoft
-                            font.family: theme.bodyFont
-                            font.pixelSize: 11
-                        }
-
-                        Slider {
-                            Layout.fillWidth: true
-                            enabled: false
-                            from: 0
-                            to: 100
-                            value: root.shellState.brightness_percent
-                        }
-                    }
                 }
             }
 
             RowLayout {
                 Layout.fillWidth: true
+                Layout.fillHeight: true
                 spacing: 12
 
-                CheckBox {
-                    text: "Transparency"
-                    checked: root.shellState.transparency_enabled
-                    onToggled: root.shellState.set_transparency_preference(checked)
-                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: 12
 
-                CheckBox {
-                    text: "Dense bar"
-                    checked: root.shellState.bar_dense
-                    onToggled: root.shellState.set_bar_dense_preference(checked)
-                }
-            }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        radius: 22
+                        color: "#112233"
+                        border.width: 1
+                        border.color: "#2b4b66"
+                        implicitHeight: 226
 
-            Rectangle {
-                Layout.fillWidth: true
-                radius: 18
-                color: "#111b26"
-                border.width: 1
-                border.color: "#24394b"
-                implicitHeight: 152
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 12
+
+                            Text {
+                                text: "Quick toggles"
+                                color: theme.textStrong
+                                font.family: theme.titleFont
+                                font.pixelSize: 18
+                                font.weight: Font.DemiBold
+                            }
+
+                            GridLayout {
+                                Layout.fillWidth: true
+                                columns: 2
+                                columnSpacing: 10
+                                rowSpacing: 10
+
+                                ShellToggleButton {
+                                    text: root.shellState.transparency_enabled ? "Transparency on" : "Transparency off"
+                                    checked: root.shellState.transparency_enabled
+                                    activeFill: "#19374a"
+                                    inactiveFill: "#122335"
+                                    activeBorderColor: "#66d8ff"
+                                    inactiveBorderColor: "#31516f"
+                                    onClicked: root.shellState.set_transparency_preference(!root.shellState.transparency_enabled)
+                                }
+
+                                ShellToggleButton {
+                                    text: root.shellState.bar_dense ? "Dense bar on" : "Dense bar off"
+                                    checked: root.shellState.bar_dense
+                                    activeFill: "#1f3128"
+                                    inactiveFill: "#152737"
+                                    activeBorderColor: "#75d7a5"
+                                    inactiveBorderColor: "#34536d"
+                                    onClicked: root.shellState.set_bar_dense_preference(!root.shellState.bar_dense)
+                                }
+
+                                ShellButton {
+                                    text: "Inbox"
+                                    compact: true
+                                    fill: "#30261a"
+                                    borderColor: "#7b6438"
+                                    onClicked: root.shellState.toggle_notifications()
+                                }
+
+                                ShellButton {
+                                    text: "Theme"
+                                    compact: true
+                                    fill: "#2b2031"
+                                    borderColor: "#755089"
+                                    onClicked: root.shellState.toggle_wallpaper_selector()
+                                }
+
+                                ShellButton {
+                                    text: "Settings"
+                                    compact: true
+                                    fill: "#173046"
+                                    borderColor: "#4c7ea3"
+                                    onClicked: root.shellState.toggle_settings()
+                                }
+
+                                ShellButton {
+                                    text: "Session"
+                                    compact: true
+                                    fill: "#311f24"
+                                    borderColor: "#83525d"
+                                    onClicked: root.shellState.toggle_session()
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        radius: 22
+                        color: "#0f1a26"
+                        border.width: 1
+                        border.color: "#264258"
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 12
+
+                            Text {
+                                text: "Capability edge"
+                                color: theme.textStrong
+                                font.family: theme.titleFont
+                                font.pixelSize: 18
+                                font.weight: Font.DemiBold
+                            }
+
+                            Text {
+                                text: "Hyprland " + (root.shellState.has_hyprland ? "online" : "preview")
+                                color: root.shellState.has_hyprland ? theme.mintAccent : theme.warmAccent
+                                font.family: theme.bodyFont
+                                font.pixelSize: 12
+                            }
+
+                            Text {
+                                text: "playerctl " + (root.shellState.has_playerctl ? "ready" : "missing")
+                                color: theme.textSoft
+                                font.family: theme.bodyFont
+                                font.pixelSize: 11
+                            }
+
+                            Text {
+                                text: "nmcli " + (root.shellState.has_nmcli ? "ready" : "missing")
+                                color: theme.textSoft
+                                font.family: theme.bodyFont
+                                font.pixelSize: 11
+                            }
+
+                            Text {
+                                text: "brightnessctl " + (root.shellState.has_brightnessctl ? "ready" : "missing")
+                                color: theme.textSoft
+                                font.family: theme.bodyFont
+                                font.pixelSize: 11
+                            }
+
+                            Text {
+                                text: "upower " + (root.shellState.has_upower ? "ready" : "missing")
+                                color: theme.textSoft
+                                font.family: theme.bodyFont
+                                font.pixelSize: 11
+                            }
+                        }
+                    }
+                }
 
                 ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 8
+                    Layout.preferredWidth: 184
+                    Layout.fillHeight: true
+                    spacing: 12
 
-                    Text {
-                        text: "Terminal command"
-                        color: theme.textStrong
-                        font.family: theme.bodyFont
-                        font.pixelSize: 13
-                        font.weight: Font.DemiBold
-                    }
-
-                    TextField {
-                        id: terminalField
-
+                    Rectangle {
                         Layout.fillWidth: true
-                        text: root.shellState.terminal_command
-                        placeholderText: "kitty -1"
+                        radius: 22
+                        color: "#122334"
+                        border.width: 1
+                        border.color: "#2d4f6c"
+                        implicitHeight: 150
+
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 8
+
+                            Text {
+                                text: "Volume"
+                                color: theme.textStrong
+                                font.family: theme.titleFont
+                                font.pixelSize: 16
+                                font.weight: Font.DemiBold
+                            }
+
+                            Text {
+                                text: root.shellState.volume_percent + "%"
+                                color: theme.surfaceHighlight
+                                font.family: theme.titleFont
+                                font.pixelSize: 28
+                                font.weight: Font.Black
+                            }
+
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 12
+                                radius: 6
+                                color: "#1b3045"
+
+                                Rectangle {
+                                    width: parent.width * Math.max(0, Math.min(100, root.shellState.volume_percent)) / 100
+                                    height: parent.height
+                                    radius: parent.radius
+                                    color: root.shellState.accent_color
+                                }
+                            }
+                        }
                     }
 
-                    RowLayout {
+                    Rectangle {
                         Layout.fillWidth: true
+                        radius: 22
+                        color: "#102232"
+                        border.width: 1
+                        border.color: "#2b4c65"
+                        implicitHeight: 150
 
-                        Button {
-                            text: "Save"
-                            onClicked: root.shellState.set_terminal_command_value(terminalField.text)
-                        }
+                        ColumnLayout {
+                            anchors.fill: parent
+                            anchors.margins: 16
+                            spacing: 8
 
-                        Button {
-                            text: "Refresh"
-                            onClicked: root.shellState.refresh_shell()
-                        }
+                            Text {
+                                text: "Brightness"
+                                color: theme.textStrong
+                                font.family: theme.titleFont
+                                font.pixelSize: 16
+                                font.weight: Font.DemiBold
+                            }
 
-                        Item {
-                            Layout.fillWidth: true
-                        }
+                            Text {
+                                text: root.shellState.brightness_percent + "%"
+                                color: theme.goldAccent
+                                font.family: theme.titleFont
+                                font.pixelSize: 28
+                                font.weight: Font.Black
+                            }
 
-                        Text {
-                            text: "Config " + root.shellState.config_path
-                            color: theme.textDim
-                            font.family: theme.monoFont
-                            font.pixelSize: 10
-                            elide: Text.ElideLeft
-                            Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignRight
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 12
+                                radius: 6
+                                color: "#1b3045"
+
+                                Rectangle {
+                                    width: parent.width * Math.max(0, Math.min(100, root.shellState.brightness_percent)) / 100
+                                    height: parent.height
+                                    radius: parent.radius
+                                    color: "#f0d18d"
+                                }
+                            }
                         }
                     }
-                }
-            }
 
-            Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                radius: 18
-                color: "#101824"
-                border.width: 1
-                border.color: "#22384b"
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 6
-
-                    Text {
-                        text: "Capability edge"
-                        color: theme.textStrong
-                        font.family: theme.titleFont
-                        font.pixelSize: 14
-                        font.weight: Font.DemiBold
-                    }
-
-                    Text {
-                        text: "Hyprland " + (root.shellState.has_hyprland ? "online" : "preview")
-                        color: root.shellState.has_hyprland ? theme.mintAccent : theme.warmAccent
-                        font.family: theme.bodyFont
-                        font.pixelSize: 12
-                    }
-
-                    Text {
-                        text: "playerctl " + (root.shellState.has_playerctl ? "ready" : "missing")
-                        color: theme.textSoft
-                        font.family: theme.bodyFont
-                        font.pixelSize: 11
-                    }
-
-                    Text {
-                        text: "nmcli " + (root.shellState.has_nmcli ? "ready" : "missing") + " • brightnessctl " + (root.shellState.has_brightnessctl ? "ready" : "missing")
-                        color: theme.textSoft
-                        font.family: theme.bodyFont
-                        font.pixelSize: 11
+                    ShellButton {
+                        text: "Refresh runtime"
+                        Layout.fillWidth: true
+                        onClicked: root.shellState.refresh_shell()
                     }
                 }
             }
