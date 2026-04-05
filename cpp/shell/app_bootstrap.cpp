@@ -2,14 +2,16 @@
 
 #include <LayerShellQt/Shell>
 #include <LayerShellQt/Window>
+#include <QDebug>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlError>
 #include <QQuickWindow>
-#include <QUrl>
 
 namespace {
 
-constexpr auto kAppUrl = "qrc:/qt/qml/ProDeskShell/App.qml";
+constexpr auto kAppModule = "ProDeskShell";
+constexpr auto kAppType = "App";
 constexpr int kPanelHeight = 88;
 
 bool use_layer_shell_from_environment()
@@ -32,10 +34,18 @@ AppBootstrap::AppBootstrap()
 
 bool AppBootstrap::initialize(QQmlApplicationEngine& engine)
 {
+    QObject::connect(
+        &engine,
+        &QQmlApplicationEngine::warnings,
+        &engine,
+        [this](const QList<QQmlError>& warnings) { record_qml_warnings(warnings); });
+
     engine.rootContext()->setContextProperty(QStringLiteral("shellUseLayerShell"), m_use_layer_shell);
-    engine.load(QUrl(QString::fromLatin1(kAppUrl)));
+    engine.loadFromModule(QString::fromLatin1(kAppModule), QString::fromLatin1(kAppType));
     if (engine.rootObjects().isEmpty()) {
-        m_last_error = QStringLiteral("QQmlApplicationEngine failed to load App.qml");
+        if (m_last_error.isEmpty()) {
+            m_last_error = QStringLiteral("QQmlApplicationEngine failed to load App.qml");
+        }
         return false;
     }
 
@@ -55,6 +65,21 @@ bool AppBootstrap::initialize(QQmlApplicationEngine& engine)
 QString AppBootstrap::last_error() const
 {
     return m_last_error;
+}
+
+void AppBootstrap::record_qml_warnings(const QList<QQmlError>& warnings)
+{
+    QStringList formatted_warnings;
+    formatted_warnings.reserve(warnings.size());
+
+    for (const auto& warning : warnings) {
+        formatted_warnings.append(warning.toString());
+    }
+
+    if (!formatted_warnings.isEmpty()) {
+        m_last_error = formatted_warnings.join(QLatin1Char('\n'));
+        qWarning().noquote() << m_last_error;
+    }
 }
 
 bool AppBootstrap::configure_layer_shell(QQuickWindow* window)

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QList>
+#include <QQmlError>
 #include <QString>
 
 class QQmlApplicationEngine;
@@ -15,6 +17,7 @@ public:
     QString last_error() const;
 
 private:
+    void record_qml_warnings(const QList<QQmlError>& warnings);
     bool configure_layer_shell(QQuickWindow* window);
 
     bool m_use_layer_shell = false;

@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import ProDeskShell
 import io.hotamago.shell 1.0
 
 ApplicationWindow {
