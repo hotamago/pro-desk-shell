@@ -27,6 +27,10 @@ from tools.bootstrap.platforms.gentoo import GentooAdapter
 DEFAULT_BUILD_DIR = ROOT_DIR / "build"
 DEFAULT_INSTALL_PREFIX = Path.home() / ".local"
 DEFAULT_BUILD_TYPE = "Debug"
+DEFAULT_HYPRLAND_DIR = Path.home() / ".config/hypr/pro-desk-shell"
+DEFAULT_BIN_DIR = Path.home() / ".local/bin"
+HYPRLAND_ASSETS_DIR = ROOT_DIR / "tools/bootstrap/assets/hyprland"
+HYPRLAND_DISPATCH_SCRIPT = ROOT_DIR / "tools/bootstrap/assets/bin/pro-desk-shell-dispatch.sh"
 
 
 def is_writable_path(path: Path) -> bool:
@@ -103,6 +107,44 @@ def run_command(
         return
 
     subprocess.run(command, cwd=cwd, check=True, env=subprocess_environment())
+
+
+def copy_tree_contents(source_dir: Path, destination_dir: Path, *, dry_run: bool) -> None:
+    for source_path in sorted(source_dir.rglob("*")):
+        relative_path = source_path.relative_to(source_dir)
+        destination_path = destination_dir / relative_path
+        if source_path.is_dir():
+            print(f"+ mkdir -p {destination_path}")
+            if not dry_run:
+                destination_path.mkdir(parents=True, exist_ok=True)
+            continue
+
+        print(f"+ cp {source_path} {destination_path}")
+        if dry_run:
+            continue
+
+        destination_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source_path, destination_path)
+
+
+def install_hyprland_assets(
+    hyprland_dir: Path,
+    bin_dir: Path,
+    *,
+    dry_run: bool,
+) -> None:
+    copy_tree_contents(HYPRLAND_ASSETS_DIR, hyprland_dir, dry_run=dry_run)
+
+    dispatch_destination = bin_dir / "pro-desk-shell-dispatch"
+    print(f"+ cp {HYPRLAND_DISPATCH_SCRIPT} {dispatch_destination}")
+    print(f"+ chmod 755 {dispatch_destination}")
+
+    if dry_run:
+        return
+
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(HYPRLAND_DISPATCH_SCRIPT, dispatch_destination)
+    dispatch_destination.chmod(0o755)
 
 
 def configure_project(
@@ -207,6 +249,11 @@ def print_doctor_report(platform: DetectedPlatform) -> int:
         ("qmake6", shutil.which("qmake6") is not None or shutil.which("qmake-qt6") is not None),
         ("layer-shell-cmake-package", layer_shell_build_support_present()),
         ("hyprland-socket", hyprland_socket_present()),
+        ("playerctl", shutil.which("playerctl") is not None),
+        ("wpctl", shutil.which("wpctl") is not None),
+        ("brightnessctl", shutil.which("brightnessctl") is not None),
+        ("nmcli", shutil.which("nmcli") is not None),
+        ("upower", shutil.which("upower") is not None),
     )
 
     print(f"Detected platform: {platform.platform_id}")
@@ -298,6 +345,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path to the os-release file used for platform detection.",
     )
 
+    hyprland_parser = subparsers.add_parser(
+        "install-hyprland",
+        help="Install managed Hyprland shell fragments and the dispatch helper.",
+    )
+    hyprland_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print file operations without applying them.",
+    )
+    hyprland_parser.add_argument(
+        "--hyprland-dir",
+        type=Path,
+        default=DEFAULT_HYPRLAND_DIR,
+        help="Destination directory for managed Hyprland fragments.",
+    )
+    hyprland_parser.add_argument(
+        "--bin-dir",
+        type=Path,
+        default=DEFAULT_BIN_DIR,
+        help="Destination directory for the Pro Desk Shell dispatch helper.",
+    )
+
     return parser
 
 
@@ -308,6 +377,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "doctor":
         platform = detect_platform(args.os_release)
         return print_doctor_report(platform)
+
+    if args.command == "install-hyprland":
+        install_hyprland_assets(args.hyprland_dir, args.bin_dir, dry_run=args.dry_run)
+        return 0
 
     platform = detect_platform()
 

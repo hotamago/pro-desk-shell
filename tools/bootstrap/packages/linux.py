@@ -31,9 +31,15 @@ PACKAGE_GROUPS = {
         runtime=(
             "qt6-qtwayland",
             "layer-shell-qt",
+            "brightnessctl",
+            "playerctl",
+            "NetworkManager",
+            "upower",
         ),
         optional=(
             "hyprland",
+            "wl-clipboard",
+            "pavucontrol",
         ),
     ),
 }

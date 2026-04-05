@@ -6,6 +6,12 @@ Thanks for helping build Pro Desk Shell.
 
 The project is still early, which means contributors can shape both the architecture and the day-to-day developer experience. The codebase is intentionally small right now, but it already has clear boundaries between UI, Qt bootstrap code, Rust domain logic, and bootstrap automation. Keeping those seams clean is one of the most important ways to help the project scale.
 
+## Provenance and licensing
+
+This repository is `GPL-3.0-only`.
+
+Keep implementation work native to this codebase. Do not import external shell code, config bundles, or art assets into tracked project files without an explicit licensing and provenance review.
+
 ## Before you start
 
 Please read:
@@ -38,6 +44,7 @@ Useful commands:
 ./devsh run
 PRO_DESK_SHELL_USE_LAYER_SHELL=1 ./devsh run
 ./devsh update --yes
+./devsh install-hyprland
 ```
 
 ### Validation commands
@@ -84,6 +91,7 @@ Use `shell-hyprland` for:
 - Hyprland socket discovery
 - Hyprland event parsing
 - compositor-specific mapping into generic shell state
+- shell-critical runtime adapters used by the top bar and quick settings surfaces
 
 ### `rust/crates/shell-ui-bridge/`
 
@@ -188,6 +196,7 @@ Examples of high-value contributions:
 - add more automated tests for the bootstrap CLI
 - improve desktop shell UX in QML
 - wire real Hyprland data into the bridge
+- expand the mailbox and keybind path into richer shell control APIs
 - add or finish distro adapters
 - tighten packaging and release automation
 

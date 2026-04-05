@@ -1,64 +1,33 @@
 # Pro Desk Shell
 
-Pro Desk Shell is a Fedora-first desktop shell scaffold for Wayland and Hyprland, built with `Qt6`, `QML`, `CMake`, `layer-shell-qt`, and `Rust`. The project is intentionally split so UI composition stays declarative, compositor-facing logic stays testable in Rust, and the Qt/Wayland bootstrap seam remains thin and replaceable.
+Pro Desk Shell is a Fedora-first Hyprland desktop shell built with `Qt6`, `QML`, `CMake`, `layer-shell-qt`, and `Rust`.
+The repository now includes a real shell foundation: a top bar, launcher, notification center, quick settings surface, wallpaper/theme controls, a session surface, and a settings window backed by a Rust bridge.
 
-The repository is still in an early phase, but it already includes a working layer-shell application skeleton, a bootstrap CLI, initial project architecture, and CI/CD wiring for validation and release snapshots.
+The architecture stays intentionally split:
 
-## Project goals
+- `cpp/` owns Qt startup and `layer-shell-qt` window configuration
+- `qml/` owns surface composition and presentation
+- `rust/crates/shell-core/` owns config, shell state, actions, XDG paths, and pure parsers
+- `rust/crates/shell-hyprland/` owns Hyprland IPC plus shell-critical runtime adapters
+- `rust/crates/shell-ui-bridge/` owns the `cxx-qt` seam exposed to QML
+- `tools/bootstrap/` owns package installation and managed Hyprland asset installation
 
-- Build a desktop shell that feels native to modern Wayland compositors.
-- Keep core state and system integration outside QML so behavior stays testable.
-- Support Fedora first, while making room for additional Linux distributions over time.
-- Make local setup, build, and release automation easy for contributors to understand.
+## Status
 
-## Current status
+Current shell work includes:
 
-Today the repository provides:
-
-- a `Qt6` + `QML` shell application with `layer-shell-qt` bootstrap code
-- a Rust workspace split into focused crates for shell state, compositor integration, and the QML bridge
-- a Python bootstrap entrypoint exposed as `./devsh`
-- a simple desktop test UI for iterating on shell layout and UX
-- automated validation for `main` and release publishing from the `release` branch
+- an `ii`-inspired shell UI rebuilt locally in this repo
+- persisted config at `~/.config/pro-desk-shell/config.json`
+- runtime state at `~/.local/state/pro-desk-shell`
+- Hyprland snapshot loading for workspaces and active window state
+- a mailbox-based action bridge for Hyprland keybind dispatch
+- managed Hyprland fragments installable through `./devsh install-hyprland`
 
 Current limitations:
 
+- the shell is still v1 and does not yet implement every planned desktop feature
+- several long-tail services remain deferred, including clipboard history, OCR/screen tools, AI/chat, weather, and tray hosting
 - Fedora is the only fully implemented bootstrap target today
-- Hyprland integration is still placeholder-oriented rather than production-complete
-- the UI is a test surface, not yet a finished shell experience
-
-## Architecture at a glance
-
-The project is intentionally layered:
-
-- `cpp/`: Qt application startup and `layer-shell-qt` window wiring
-- `qml/`: visual composition and component structure only
-- `rust/crates/shell-core/`: compositor-agnostic shell state and pure Rust behavior
-- `rust/crates/shell-hyprland/`: Hyprland integration seam
-- `rust/crates/shell-ui-bridge/`: the only Rust crate that speaks directly to Qt via `cxx-qt`
-- `tools/bootstrap/`: local developer automation and distro bootstrap logic
-
-Design rules for the repo:
-
-- QML owns presentation, not business logic.
-- Rust owns domain state and compositor-facing logic.
-- `layer-shell-qt` remains in the C++ bootstrap layer.
-- Bootstrap/install logic stays centralized in `./devsh`.
-
-More background is available in [Bootstrap Architecture](./docs/architecture/bootstrap.md).
-
-## Supported platforms
-
-### Fully supported today
-
-- Fedora
-
-### Scaffolded, not yet implemented
-
-- Arch Linux
-- Gentoo
-
-The distro adapter model already exists, so new platform support mostly means extending package mapping and installation behavior instead of rewriting the entire bootstrap flow.
 
 ## Getting started
 
@@ -72,70 +41,47 @@ You need a Linux environment with:
 - a Qt6 development toolchain
 - `layer-shell-qt` development files
 
-On Fedora, the project bootstrap can install the required packages for you.
+On Fedora, the bootstrap CLI can install the shell-critical packages for you.
 
-### Install dependencies
-
-```bash
-./devsh install --yes
-./devsh install --yes --deps-only
-```
-
-If your machine is already provisioned and you only want to configure/build the project:
-
-```bash
-./devsh build
-```
-
-### Useful local commands
+### Useful commands
 
 ```bash
 ./devsh doctor
+./devsh install --yes
+./devsh install --yes --deps-only
 ./devsh build
-./devsh build --build-type Release --build-dir build-release
 ./devsh run
-./devsh update --yes
-```
-
-### What `./devsh` does
-
-`./devsh` is the canonical project entrypoint. It wraps the bootstrap code in `tools/bootstrap/main.py` and handles:
-
-- distro detection
-- dependency installation
-- CMake configuration
-- project builds
-- local install/update flows
-
-Available build types:
-
-- `Debug`
-- `Release`
-- `RelWithDebInfo`
-- `MinSizeRel`
-
-## Running the shell locally
-
-The fastest local development loop is:
-
-```bash
-./devsh build
 ./devsh run --skip-build
+./devsh update --yes
+./devsh install-hyprland
 ```
 
-If you want a fresh configure-and-run in one step:
+### Running the shell
+
+Developer window mode:
 
 ```bash
 ./devsh run
 ```
 
-If you want to test the actual layer-shell path instead of the default developer window mode:
+Layer-shell mode:
 
 ```bash
 PRO_DESK_SHELL_USE_LAYER_SHELL=1 ./devsh run
 ```
 
-If your environment has `ccache` configured but its cache directory is not writable, the bootstrap CLI now automatically disables `ccache` for the subprocess rather than failing the build.
+### Installing managed Hyprland fragments
+
+```bash
+./devsh install-hyprland
+```
+
+This installs:
+
+- Hyprland fragments into `~/.config/hypr/pro-desk-shell`
+- the dispatch helper into `~/.local/bin/pro-desk-shell-dispatch`
+
+Then source `~/.config/hypr/pro-desk-shell/main.conf` from your main Hyprland config.
 
 ## Verification
 
@@ -143,69 +89,43 @@ Current verification commands:
 
 ```bash
 python3 -m unittest discover -s tools/bootstrap/tests
-cargo test --manifest-path rust/Cargo.toml
+CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo test --manifest-path rust/Cargo.toml
+CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo build --manifest-path rust/Cargo.toml -p shell_ui_bridge
 ./devsh build
 ```
 
-Useful lower-level checks:
-
-```bash
-./devsh doctor
-./devsh build --build-type Release --build-dir build-release
-```
-
-## CI/CD
-
-The repository ships two GitHub Actions workflows:
-
-- `main.yml`: validates pushes and pull requests targeting `main`
-- `release.yml`: validates the `release` branch, builds a release bundle, and publishes a GitHub prerelease snapshot
-
-Release workflow behavior:
-
-- tests must pass before release packaging starts
-- the release bundle contains the built binary, `README.md`, and `LICENSE`
-- release assets are uploaded to GitHub Releases with a generated snapshot tag
+`cargo test` still uses `default-members`, so it exercises the pure-Rust crates first. The bridge crate should be verified with a targeted build or the full CMake path.
 
 ## Repository layout
 
 ```text
 .
-├── .github/workflows/       # CI/CD
-├── cpp/                     # Qt bootstrap and layer-shell window setup
-├── docs/                    # Architecture and contributor documentation
-├── qml/                     # Declarative UI
+├── .github/workflows/
+├── cpp/
+├── docs/
+├── qml/
 ├── rust/
 │   └── crates/
-│       ├── shell-core/      # Pure Rust shell domain state
-│       ├── shell-hyprland/  # Hyprland adapter seam
-│       └── shell-ui-bridge/ # Qt bridge crate exposed to QML
-├── tools/bootstrap/         # Bootstrap CLI and distro adapters
+│       ├── shell-core/
+│       ├── shell-hyprland/
+│       └── shell-ui-bridge/
+├── tools/bootstrap/
 ├── CMakeLists.txt
 └── devsh
 ```
 
 ## Contributing
 
-Contributions are welcome, especially around:
+Contributions are welcome around:
 
-- compositor state modeling
-- Hyprland IPC integration
-- shell UX exploration in QML
-- distro adapter support beyond Fedora
-- packaging, testing, and release automation
+- Hyprland IPC hardening
+- richer shell services and panels
+- QML surface polish and animation work
+- Fedora packaging and release automation
+- distro adapter work beyond Fedora
 
-Start with [Contributor Guide](./docs/contributing.md). It covers environment setup, project conventions, testing expectations, and the release branch workflow.
-
-## Roadmap
-
-Near-term priorities:
-
-- replace placeholder compositor state with live Hyprland data
-- evolve the test UI into reusable shell surfaces
-- expand distro bootstrap coverage
-- harden packaging and binary release outputs
+Start with [Contributor Guide](./docs/contributing.md) and [Bootstrap Architecture](./docs/architecture/bootstrap.md).
 
 ## License
 
-This project is licensed under the [MIT License](./LICENSE).
+This project is licensed under the [GNU General Public License v3.0](./LICENSE).

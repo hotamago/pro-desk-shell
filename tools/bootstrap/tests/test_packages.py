@@ -26,6 +26,8 @@ class PackageResolutionTests(unittest.TestCase):
         self.assertIn("qt6-qtbase-private-devel", group.build)
         self.assertIn("layer-shell-qt-devel", group.build)
         self.assertIn("qt6-qtwayland", group.runtime)
+        self.assertIn("playerctl", group.runtime)
+        self.assertIn("brightnessctl", group.runtime)
         self.assertIn("hyprland", group.optional)
 
     def test_unsupported_family_raises_clear_error(self) -> None:
@@ -77,6 +79,22 @@ class PackageResolutionTests(unittest.TestCase):
         self.assertEqual(args.command, "install")
         self.assertTrue(args.yes)
         self.assertTrue(args.deps_only)
+
+    def test_install_hyprland_parser_accepts_custom_paths(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "install-hyprland",
+                "--hyprland-dir",
+                "/tmp/hypr/pro-desk-shell",
+                "--bin-dir",
+                "/tmp/bin",
+            ]
+        )
+
+        self.assertEqual(args.command, "install-hyprland")
+        self.assertEqual(args.hyprland_dir, Path("/tmp/hypr/pro-desk-shell"))
+        self.assertEqual(args.bin_dir, Path("/tmp/bin"))
 
     def test_fedora_install_command_skips_sudo_when_unavailable(self) -> None:
         with mock.patch("tools.bootstrap.platforms.fedora.os.geteuid", return_value=1000):

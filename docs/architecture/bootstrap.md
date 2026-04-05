@@ -40,12 +40,14 @@ It should not own business logic or system integration logic.
 - command IPC client
 - event stream parsing
 - Hyprland-specific data mapping into generic shell state
+- shell-critical system adapters used by the top bar and quick settings surfaces
 
 `rust/crates/shell-ui-bridge/` is the only crate allowed to depend directly on `cxx-qt`. It converts Rust state into QML-visible `QObject`s and protects the rest of the workspace from Qt coupling.
 
 ## Bootstrap CLI layout
 
 `tools/bootstrap/main.py` is the single entrypoint used by `./devsh`.
+It now also installs managed Hyprland fragments and the dispatch helper used by the shell mailbox flow.
 
 `tools/bootstrap/packages/` stores declarative package groups.
 
@@ -63,7 +65,7 @@ This split keeps distro growth mostly data-oriented:
 
 ## Current verification scope
 
-- `shell_core` has unit tests for placeholder shell state behavior.
+- `shell_core` has unit tests for shell state defaults and parser behavior.
 - bootstrap package resolution has Python unit tests.
 - `rust/Cargo.toml` uses `default-members` so plain `cargo test` exercises the pure-Rust crates first.
 - `shell-ui-bridge` should be verified with `cargo build -p shell_ui_bridge` or the CMake build path rather than a Rust test harness.

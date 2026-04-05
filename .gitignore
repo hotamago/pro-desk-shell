@@ -12,3 +12,4 @@ rust/target/
 .idea/
 .vscode/
 .DS_Store
+_temp/

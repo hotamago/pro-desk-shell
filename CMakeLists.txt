@@ -16,8 +16,12 @@ include(CompilerWarnings)
 find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 WaylandClient)
 find_package(LayerShellQt REQUIRED)
 
-if(POLICY QTP0001)
+if(QT_KNOWN_POLICY_QTP0001)
     qt_policy(SET QTP0001 NEW)
+endif()
+
+if(QT_KNOWN_POLICY_QTP0004)
+    qt_policy(SET QTP0004 NEW)
 endif()
 
 qt_standard_project_setup(REQUIRES 6.5)
@@ -55,13 +59,17 @@ pro_desk_shell_set_common_warnings(pro-desk-shell)
 
 target_include_directories(pro-desk-shell PRIVATE cpp)
 
+file(GLOB_RECURSE PRO_DESK_SHELL_QML_FILES
+    RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+    CONFIGURE_DEPENDS
+    "qml/*.qml"
+)
+
 qt_add_qml_module(pro-desk-shell
     URI ProDeskShell
     VERSION 1.0
     QML_FILES
-        qml/App.qml
-        qml/components/DesktopTestBar.qml
-        qml/components/PlaceholderBar.qml
+        ${PRO_DESK_SHELL_QML_FILES}
 )
 
 target_link_libraries(pro-desk-shell
@@ -75,8 +83,6 @@ target_link_libraries(pro-desk-shell
         Qt::QuickControls2
         Qt::WaylandClient
 )
-
-qt_import_qml_plugins(pro-desk-shell)
 
 install(
     TARGETS pro-desk-shell
