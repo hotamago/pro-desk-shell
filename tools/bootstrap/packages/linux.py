@@ -15,6 +15,7 @@ class PackageGroup:
 PACKAGE_GROUPS = {
     "fedora": PackageGroup(
         build=(
+            "git",
             "cmake",
             "gcc-c++",
             "ninja-build",
