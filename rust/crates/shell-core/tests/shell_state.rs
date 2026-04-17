@@ -1,18 +1,7 @@
 use shell_core::{
-    ActiveWindowSummary,
-    AppEntrySummary,
-    BatterySummary,
-    DockItemSummary,
-    MediaSummary,
-    MissionControlWorkspaceSummary,
-    NetworkSummary,
-    NotificationItemSummary,
-    NotificationSummary,
-    PlaybackStatus,
-    QuickSettingsSummary,
-    ShellCapabilities,
-    ShellSnapshot,
-    WindowSummary,
+    ActiveWindowSummary, AppEntrySummary, BatterySummary, DockItemSummary, MediaSummary,
+    MissionControlWorkspaceSummary, NetworkSummary, NotificationItemSummary, NotificationSummary,
+    PlaybackStatus, QuickSettingsSummary, ShellCapabilities, ShellSnapshot, WindowSummary,
     WorkspaceSummary,
 };
 

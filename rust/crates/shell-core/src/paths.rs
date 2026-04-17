@@ -41,7 +41,12 @@ pub fn xdg_data_home() -> PathBuf {
 pub fn xdg_data_dirs() -> Vec<PathBuf> {
     let configured = env::var_os("XDG_DATA_DIRS")
         .map(|value| env::split_paths(&value).collect::<Vec<_>>())
-        .unwrap_or_else(|| vec![PathBuf::from("/usr/local/share"), PathBuf::from("/usr/share")]);
+        .unwrap_or_else(|| {
+            vec![
+                PathBuf::from("/usr/local/share"),
+                PathBuf::from("/usr/share"),
+            ]
+        });
 
     configured
         .into_iter()
@@ -56,6 +61,24 @@ pub fn desktop_applications_dirs() -> Vec<PathBuf> {
             .into_iter()
             .map(|path| path.join("applications")),
     );
+
+    directories
+}
+
+pub fn icon_search_dirs() -> Vec<PathBuf> {
+    let mut directories = vec![
+        xdg_data_home().join("icons"),
+        xdg_data_home().join("pixmaps"),
+    ];
+
+    if let Some(home) = env::var_os("HOME") {
+        directories.push(PathBuf::from(home).join(".icons"));
+    }
+
+    for path in xdg_data_dirs() {
+        directories.push(path.join("icons"));
+        directories.push(path.join("pixmaps"));
+    }
 
     directories
 }

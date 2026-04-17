@@ -4,36 +4,22 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 
 use serde::Deserialize;
 use shell_core::{
-    ActiveWindowSummary,
-    AppEntrySummary,
-    BatterySummary,
-    NotificationItemSummary,
-    MediaSummary,
-    NetworkSummary,
-    PlaybackStatus,
-    QuickSettingsSummary,
-    ShellCapabilities,
-    ShellConfig,
-    ShellSnapshot,
-    WindowSummary,
-    WorkspaceSummary,
-    build_notification_summary,
-    derive_dock_items,
-    desktop_applications_dirs,
-    group_windows_by_workspace,
-    match_window_class_to_app_id,
-    parse_brightnessctl_machine_output,
-    parse_desktop_entry,
-    parse_nmcli_active_wifi,
-    parse_playerctl_metadata_output,
-    parse_upower_output,
-    parse_wpctl_volume_output,
+    build_notification_summary, derive_dock_items, desktop_applications_dirs,
+    group_windows_by_workspace, icon_search_dirs, match_window_class_to_app_id,
+    parse_brightnessctl_machine_output, parse_desktop_entry, parse_nmcli_active_wifi,
+    parse_playerctl_metadata_output, parse_upower_output, parse_wpctl_volume_output,
+    ActiveWindowSummary, AppEntrySummary, BatterySummary, MediaSummary, NetworkSummary,
+    NotificationItemSummary, PlaybackStatus, QuickSettingsSummary, ShellCapabilities, ShellConfig,
+    ShellSnapshot, WindowSummary, WorkspaceSummary,
 };
+
+static APP_CATALOG_CACHE: OnceLock<Vec<AppEntrySummary>> = OnceLock::new();
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HyprlandSockets {
@@ -79,7 +65,12 @@ pub fn load_snapshot(config: &ShellConfig) -> Result<ShellSnapshot, String> {
     let app_catalog = load_app_catalog();
     let system_state = system_state_snapshot(&capabilities);
     let Some(sockets) = detect_sockets() else {
-        return Ok(fallback_snapshot(config, capabilities, system_state, app_catalog));
+        return Ok(fallback_snapshot(
+            config,
+            capabilities,
+            system_state,
+            app_catalog,
+        ));
     };
 
     let client = HyprlandClient::new(sockets);
@@ -101,7 +92,11 @@ pub fn load_snapshot(config: &ShellConfig) -> Result<ShellSnapshot, String> {
         .iter()
         .find(|monitor| monitor.focused)
         .map(|monitor| monitor.active_workspace.name.clone())
-        .or_else(|| monitors.first().map(|monitor| monitor.active_workspace.name.clone()));
+        .or_else(|| {
+            monitors
+                .first()
+                .map(|monitor| monitor.active_workspace.name.clone())
+        });
 
     let window_summaries = build_window_summaries(&clients, &active_window, &app_catalog);
     let workspace_summaries = workspaces
@@ -212,7 +207,10 @@ pub fn set_brightness_percent(value: i32) -> Result<(), String> {
             if status.success() {
                 Ok(())
             } else {
-                Err(format!("brightnessctl exited with status {:?}.", status.code()))
+                Err(format!(
+                    "brightnessctl exited with status {:?}.",
+                    status.code()
+                ))
             }
         })
 }
@@ -266,17 +264,17 @@ impl HyprlandClient {
             )
         })?;
 
-        stream
-            .write_all(command.as_bytes())
-            .map_err(|error| format!("Could not write Hyprland IPC command '{command}': {error}"))?;
-        stream
-            .shutdown(Shutdown::Write)
-            .map_err(|error| format!("Could not finalize Hyprland IPC command '{command}': {error}"))?;
+        stream.write_all(command.as_bytes()).map_err(|error| {
+            format!("Could not write Hyprland IPC command '{command}': {error}")
+        })?;
+        stream.shutdown(Shutdown::Write).map_err(|error| {
+            format!("Could not finalize Hyprland IPC command '{command}': {error}")
+        })?;
 
         let mut response = String::new();
-        stream
-            .read_to_string(&mut response)
-            .map_err(|error| format!("Could not read Hyprland IPC response for '{command}': {error}"))?;
+        stream.read_to_string(&mut response).map_err(|error| {
+            format!("Could not read Hyprland IPC response for '{command}': {error}")
+        })?;
 
         Ok(response)
     }
@@ -361,9 +359,21 @@ fn system_state_snapshot(capabilities: &ShellCapabilities) -> SystemStateSnapsho
         )
         .as_deref()
         .and_then(parse_playerctl_metadata_output)
-        .unwrap_or_else(|| MediaSummary::new("playerctl", "Nothing playing", "Idle", PlaybackStatus::Stopped))
+        .unwrap_or_else(|| {
+            MediaSummary::new(
+                "playerctl",
+                "Nothing playing",
+                "Idle",
+                PlaybackStatus::Stopped,
+            )
+        })
     } else {
-        MediaSummary::new("media", "Playerctl unavailable", "Install playerctl for live data", PlaybackStatus::Unknown)
+        MediaSummary::new(
+            "media",
+            "Playerctl unavailable",
+            "Install playerctl for live data",
+            PlaybackStatus::Unknown,
+        )
     };
 
     let volume_percent = if capabilities.has_wpctl {
@@ -461,12 +471,11 @@ fn build_window_summaries(
         .map(|client| {
             let app_id = match_window_class_to_app_id(&client.class_name, app_catalog)
                 .unwrap_or_else(|| empty_fallback(&client.class_name, "unknown"));
-            let focused = (!active_window.address.is_empty() && client.address == active_window.address)
-                || (
-                    client.class_name == active_window.class_name
-                        && client.title == active_window.title
-                        && !client.title.is_empty()
-                );
+            let focused = (!active_window.address.is_empty()
+                && client.address == active_window.address)
+                || (client.class_name == active_window.class_name
+                    && client.title == active_window.title
+                    && !client.title.is_empty());
 
             WindowSummary::new(
                 client.address.clone(),
@@ -484,6 +493,12 @@ fn build_window_summaries(
 }
 
 fn load_app_catalog() -> Vec<AppEntrySummary> {
+    APP_CATALOG_CACHE
+        .get_or_init(load_app_catalog_uncached)
+        .clone()
+}
+
+fn load_app_catalog_uncached() -> Vec<AppEntrySummary> {
     let mut catalog = BTreeMap::<String, AppEntrySummary>::new();
 
     for directory in desktop_applications_dirs() {
@@ -510,6 +525,11 @@ fn load_app_catalog() -> Vec<AppEntrySummary> {
             };
 
             if let Some(app) = parse_desktop_entry(stem, &content) {
+                let app = if let Some(icon_path) = resolve_icon_path(app.icon_name()) {
+                    app.with_icon_path(icon_path)
+                } else {
+                    app
+                };
                 catalog.entry(app.app_id().to_owned()).or_insert(app);
             }
         }
@@ -522,6 +542,94 @@ fn load_app_catalog() -> Vec<AppEntrySummary> {
     catalog.into_values().collect()
 }
 
+fn resolve_icon_path(icon_name: &str) -> Option<String> {
+    let trimmed = icon_name.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+
+    let direct_path = PathBuf::from(trimmed);
+    if direct_path.is_file() {
+        return Some(direct_path.to_string_lossy().into_owned());
+    }
+
+    let exact_candidates = if Path::new(trimmed).extension().is_some() {
+        vec![trimmed.to_owned()]
+    } else {
+        ["png", "svg", "xpm", "jpg", "jpeg", "webp"]
+            .into_iter()
+            .map(|extension| format!("{trimmed}.{extension}"))
+            .collect::<Vec<_>>()
+    };
+
+    for directory in icon_search_dirs() {
+        if let Some(path) = find_icon_in_dir(&directory, trimmed, &exact_candidates) {
+            return Some(path.to_string_lossy().into_owned());
+        }
+    }
+
+    None
+}
+
+fn find_icon_in_dir(
+    directory: &Path,
+    icon_name: &str,
+    exact_candidates: &[String],
+) -> Option<PathBuf> {
+    if !directory.exists() {
+        return None;
+    }
+
+    for candidate in exact_candidates {
+        let candidate_path = directory.join(candidate);
+        if candidate_path.is_file() {
+            return Some(candidate_path);
+        }
+    }
+
+    let mut pending = vec![(directory.to_path_buf(), 0usize)];
+    while let Some((current, depth)) = pending.pop() {
+        let Ok(entries) = fs::read_dir(&current) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file() {
+                if icon_matches(&path, icon_name, exact_candidates) {
+                    return Some(path);
+                }
+                continue;
+            }
+
+            if depth < 5 {
+                pending.push((path, depth + 1));
+            }
+        }
+    }
+
+    None
+}
+
+fn icon_matches(path: &Path, icon_name: &str, exact_candidates: &[String]) -> bool {
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    let file_stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or_default();
+    let normalized_name = icon_name.to_ascii_lowercase();
+    let normalized_file_name = file_name.to_ascii_lowercase();
+    let normalized_file_stem = file_stem.to_ascii_lowercase();
+
+    exact_candidates
+        .iter()
+        .any(|candidate| normalized_file_name == candidate.to_ascii_lowercase())
+        || normalized_file_stem == normalized_name
+}
+
 fn primary_battery_path() -> Option<String> {
     let output = command_output("upower", &["-e"])?;
     output
@@ -532,7 +640,8 @@ fn primary_battery_path() -> Option<String> {
 }
 
 fn dispatch(command: &str) -> Result<(), String> {
-    let sockets = detect_sockets().ok_or_else(|| String::from("Hyprland sockets are unavailable."))?;
+    let sockets =
+        detect_sockets().ok_or_else(|| String::from("Hyprland sockets are unavailable."))?;
     let client = HyprlandClient::new(sockets);
     client.command(&format!("dispatch {command}")).map(|_| ())
 }
@@ -621,7 +730,7 @@ struct HyprClient {
 
 #[cfg(test)]
 mod tests {
-    use super::{HyprlandEvent, parse_event_line};
+    use super::{parse_event_line, HyprlandEvent};
 
     #[test]
     fn parses_workspace_event() {

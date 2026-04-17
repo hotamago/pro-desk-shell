@@ -107,13 +107,12 @@ Item {
                             radius: 14
                             color: root.theme.accentColor
 
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.display_name.length > 0 ? modelData.display_name.charAt(0).toUpperCase() : "?"
-                                color: "#ffffff"
-                                font.family: root.theme.displayFont
-                                font.pixelSize: 18
-                                font.weight: Font.DemiBold
+                            AppIcon {
+                                anchors.fill: parent
+                                theme: root.theme
+                                displayName: modelData.display_name || modelData.app_id || "App"
+                                iconPath: modelData.icon_path || ""
+                                textColor: "#ffffff"
                             }
                         }
 

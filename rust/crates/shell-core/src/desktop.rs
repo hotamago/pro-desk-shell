@@ -71,7 +71,9 @@ pub fn parse_desktop_entry(app_id: &str, content: &str) -> Option<AppEntrySummar
 
 pub fn sanitize_exec_command(value: &str) -> String {
     let mut sanitized = value.replace("%%", "__PERCENT_ESCAPE__");
-    for field_code in ["%f", "%F", "%u", "%U", "%d", "%D", "%n", "%N", "%i", "%c", "%k", "%v", "%m"] {
+    for field_code in [
+        "%f", "%F", "%u", "%U", "%d", "%D", "%n", "%N", "%i", "%c", "%k", "%v", "%m",
+    ] {
         sanitized = sanitized.replace(field_code, " ");
     }
 
@@ -200,7 +202,10 @@ fn normalize_for_match(value: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{match_window_class_to_app_id, parse_desktop_entry, sanitize_exec_command, search_app_entries};
+    use super::{
+        match_window_class_to_app_id, parse_desktop_entry, sanitize_exec_command,
+        search_app_entries,
+    };
     use crate::AppEntrySummary;
 
     #[test]
@@ -246,7 +251,10 @@ mod tests {
         ];
 
         let results = search_app_entries(&apps, "files", 5);
-        assert_eq!(results.first().map(AppEntrySummary::display_name), Some("Files"));
+        assert_eq!(
+            results.first().map(AppEntrySummary::display_name),
+            Some("Files")
+        );
     }
 
     #[test]

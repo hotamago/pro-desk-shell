@@ -1,22 +1,13 @@
 use std::process::Command;
 
-use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QList, QString, QStringList};
 #[allow(unused_imports)]
 use core::pin::Pin;
+use cxx_qt::CxxQtType;
+use cxx_qt_lib::{QList, QString, QStringList};
 use shell_core::{
-    NotificationItemSummary,
-    ShellAction,
-    ShellConfig,
-    ShellSnapshot,
-    ShellUiState,
-    config_file_path,
-    load_or_create_config,
-    persist_config,
-    reduce_ui_state,
-    search_app_entries,
-    state_dir,
-    take_action_request,
+    config_file_path, load_or_create_config, persist_config, reduce_ui_state, search_app_entries,
+    state_dir, take_action_request, NotificationItemSummary, ShellAction, ShellConfig,
+    ShellSnapshot, ShellUiState,
 };
 
 #[cxx_qt::bridge]
@@ -59,6 +50,7 @@ mod ffi {
         #[qproperty(bool, quick_settings_open)]
         #[qproperty(String, accent_color)]
         #[qproperty(String, style_preset)]
+        #[qproperty(bool, menu_bar_compact_mode)]
         #[qproperty(String, wallpaper_path)]
         #[qproperty(String, terminal_command)]
         #[qproperty(String, config_path)]
@@ -71,7 +63,10 @@ mod ffi {
         #[qproperty(String, notification_items_json)]
         #[qproperty(String, search_results_json)]
         #[qproperty(String, launcher_query)]
+        #[qproperty(bool, dock_auto_hide)]
+        #[qproperty(bool, dock_show_running_indicators)]
         #[qproperty(i32, dock_magnification)]
+        #[qproperty(i32, launcher_max_results)]
         type ShellState = super::ShellStateRust;
 
         #[qinvokable]
@@ -127,6 +122,27 @@ mod ffi {
 
         #[qinvokable]
         fn request_brightness_percent(self: Pin<&mut ShellState>, value: i32);
+
+        #[qinvokable]
+        fn update_menu_bar_compact_mode(self: Pin<&mut ShellState>, value: bool);
+
+        #[qinvokable]
+        fn update_dock_auto_hide(self: Pin<&mut ShellState>, value: bool);
+
+        #[qinvokable]
+        fn update_dock_show_running_indicators(self: Pin<&mut ShellState>, value: bool);
+
+        #[qinvokable]
+        fn update_dock_magnification_value(self: Pin<&mut ShellState>, value: i32);
+
+        #[qinvokable]
+        fn update_launcher_max_results_value(self: Pin<&mut ShellState>, value: i32);
+
+        #[qinvokable]
+        fn update_terminal_command_value(self: Pin<&mut ShellState>, value: String);
+
+        #[qinvokable]
+        fn update_wallpaper_path_value(self: Pin<&mut ShellState>, value: String);
     }
 }
 
@@ -159,6 +175,7 @@ pub struct ShellStateRust {
     quick_settings_open: bool,
     accent_color: String,
     style_preset: String,
+    menu_bar_compact_mode: bool,
     wallpaper_path: String,
     terminal_command: String,
     config_path: String,
@@ -171,7 +188,10 @@ pub struct ShellStateRust {
     notification_items_json: String,
     search_results_json: String,
     launcher_query: String,
+    dock_auto_hide: bool,
+    dock_show_running_indicators: bool,
     dock_magnification: i32,
+    launcher_max_results: i32,
     config: ShellConfig,
     ui_state: ShellUiState,
     runtime_snapshot: ShellSnapshot,
@@ -229,6 +249,7 @@ impl ShellStateRust {
             quick_settings_open: false,
             accent_color: config.appearance.accent_color.clone(),
             style_preset: config.appearance.style_preset.clone(),
+            menu_bar_compact_mode: config.menu_bar.compact_mode,
             wallpaper_path: config.background.wallpaper_path.clone(),
             terminal_command: config.integrations.terminal.clone(),
             config_path: config_file_path().display().to_string(),
@@ -241,7 +262,10 @@ impl ShellStateRust {
             notification_items_json,
             search_results_json,
             launcher_query,
+            dock_auto_hide: config.dock.auto_hide,
+            dock_show_running_indicators: config.dock.show_running_indicators,
             dock_magnification: config.dock.magnification,
+            launcher_max_results: config.launcher.max_results as i32,
             config,
             ui_state: ShellUiState::default(),
             runtime_snapshot: snapshot,
@@ -440,11 +464,85 @@ impl ffi::ShellState {
         match shell_hyprland::set_brightness_percent(value) {
             Ok(()) => {
                 self.as_mut().set_brightness_percent(value.clamp(1, 100));
-                self.as_mut()
-                    .set_status_line(format!("Brightness target set to {}%.", value.clamp(1, 100)));
+                self.as_mut().set_status_line(format!(
+                    "Brightness target set to {}%.",
+                    value.clamp(1, 100)
+                ));
             }
             Err(error) => self.as_mut().set_status_line(error),
         }
+    }
+
+    fn update_menu_bar_compact_mode(mut self: core::pin::Pin<&mut Self>, value: bool) {
+        self.as_mut()
+            .rust_mut()
+            .get_mut()
+            .config
+            .menu_bar
+            .compact_mode = value;
+        self.as_mut().set_menu_bar_compact_mode(value);
+        self.as_mut().persist_current_config();
+    }
+
+    fn update_dock_auto_hide(mut self: core::pin::Pin<&mut Self>, value: bool) {
+        self.as_mut().rust_mut().get_mut().config.dock.auto_hide = value;
+        self.as_mut().set_dock_auto_hide(value);
+        self.as_mut().persist_current_config();
+    }
+
+    fn update_dock_show_running_indicators(mut self: core::pin::Pin<&mut Self>, value: bool) {
+        self.as_mut()
+            .rust_mut()
+            .get_mut()
+            .config
+            .dock
+            .show_running_indicators = value;
+        self.as_mut().set_dock_show_running_indicators(value);
+        self.as_mut().persist_current_config();
+    }
+
+    fn update_dock_magnification_value(mut self: core::pin::Pin<&mut Self>, value: i32) {
+        let clamped = value.clamp(0, 40);
+        self.as_mut().rust_mut().get_mut().config.dock.magnification = clamped;
+        self.as_mut().set_dock_magnification(clamped);
+        self.as_mut().persist_current_config();
+    }
+
+    fn update_launcher_max_results_value(mut self: core::pin::Pin<&mut Self>, value: i32) {
+        let clamped = value.clamp(4, 16);
+        self.as_mut()
+            .rust_mut()
+            .get_mut()
+            .config
+            .launcher
+            .max_results = clamped as usize;
+        self.as_mut().set_launcher_max_results(clamped);
+        self.as_mut().persist_current_config();
+        self.as_mut().refresh_search_results();
+    }
+
+    fn update_terminal_command_value(mut self: core::pin::Pin<&mut Self>, value: String) {
+        let trimmed = value.trim().to_owned();
+        self.as_mut()
+            .rust_mut()
+            .get_mut()
+            .config
+            .integrations
+            .terminal = trimmed.clone();
+        self.as_mut().set_terminal_command(trimmed);
+        self.as_mut().persist_current_config();
+    }
+
+    fn update_wallpaper_path_value(mut self: core::pin::Pin<&mut Self>, value: String) {
+        let trimmed = value.trim().to_owned();
+        self.as_mut()
+            .rust_mut()
+            .get_mut()
+            .config
+            .background
+            .wallpaper_path = trimmed.clone();
+        self.as_mut().set_wallpaper_path(trimmed);
+        self.as_mut().persist_current_config();
     }
 }
 
@@ -467,17 +565,18 @@ impl ffi::ShellState {
             .set_active_window_class(snapshot.active_window().class_name().to_owned());
         self.as_mut()
             .set_active_app_id(snapshot.active_app_id().unwrap_or_default().to_owned());
-        self.as_mut().set_media_title(snapshot.media().title().to_owned());
+        self.as_mut()
+            .set_media_title(snapshot.media().title().to_owned());
         self.as_mut()
             .set_media_artist(snapshot.media().artist().to_owned());
-        self.as_mut().set_media_playing(
-            snapshot.media().status() == shell_core::PlaybackStatus::Playing,
-        );
+        self.as_mut()
+            .set_media_playing(snapshot.media().status() == shell_core::PlaybackStatus::Playing);
         self.as_mut()
             .set_network_name(snapshot.network().name().to_owned());
         self.as_mut()
             .set_network_state(snapshot.network().state_label().to_owned());
-        self.as_mut().set_battery_percent(snapshot.battery().percent());
+        self.as_mut()
+            .set_battery_percent(snapshot.battery().percent());
         self.as_mut()
             .set_battery_charging(snapshot.battery().is_charging());
         self.as_mut()
@@ -490,11 +589,14 @@ impl ffi::ShellState {
             .set_has_hyprland(snapshot.capabilities().has_hyprland);
         self.as_mut()
             .set_has_playerctl(snapshot.capabilities().has_playerctl);
-        self.as_mut().set_has_wpctl(snapshot.capabilities().has_wpctl);
+        self.as_mut()
+            .set_has_wpctl(snapshot.capabilities().has_wpctl);
         self.as_mut()
             .set_has_brightnessctl(snapshot.capabilities().has_brightnessctl);
-        self.as_mut().set_has_nmcli(snapshot.capabilities().has_nmcli);
-        self.as_mut().set_has_upower(snapshot.capabilities().has_upower);
+        self.as_mut()
+            .set_has_nmcli(snapshot.capabilities().has_nmcli);
+        self.as_mut()
+            .set_has_upower(snapshot.capabilities().has_upower);
         self.as_mut().set_status_line(build_status_line(snapshot));
         self.as_mut().refresh_serialized_models();
     }
@@ -545,7 +647,13 @@ impl ffi::ShellState {
     }
 
     fn refresh_serialized_models(mut self: core::pin::Pin<&mut Self>) {
-        let (app_catalog_json, dock_items_json, window_items_json, mission_control_json, notification_items_json) = {
+        let (
+            app_catalog_json,
+            dock_items_json,
+            window_items_json,
+            mission_control_json,
+            notification_items_json,
+        ) = {
             let snapshot = self.as_ref().rust().runtime_snapshot.clone();
             (
                 to_json(snapshot.app_catalog()),
@@ -569,12 +677,7 @@ impl ffi::ShellState {
         let search_results_json = {
             let query = self.as_ref().rust().launcher_query.clone();
             let max_results = self.as_ref().rust().config.launcher.max_results;
-            let apps = self
-                .as_ref()
-                .rust()
-                .runtime_snapshot
-                .app_catalog()
-                .to_vec();
+            let apps = self.as_ref().rust().runtime_snapshot.app_catalog().to_vec();
             let results = search_app_entries(&apps, &query, max_results);
             to_json(&results)
         };

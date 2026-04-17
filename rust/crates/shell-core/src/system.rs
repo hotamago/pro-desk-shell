@@ -1,7 +1,10 @@
 use crate::{BatterySummary, MediaSummary, PlaybackStatus};
 
 pub fn parse_playerctl_metadata_output(output: &str) -> Option<MediaSummary> {
-    let mut lines = output.lines().map(str::trim).filter(|line| !line.is_empty());
+    let mut lines = output
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty());
     let status = match lines.next()? {
         "Playing" => PlaybackStatus::Playing,
         "Paused" => PlaybackStatus::Paused,
@@ -14,9 +17,9 @@ pub fn parse_playerctl_metadata_output(output: &str) -> Option<MediaSummary> {
 }
 
 pub fn parse_wpctl_volume_output(output: &str) -> Option<i32> {
-    let volume_token = output
-        .split_whitespace()
-        .find(|token| token.contains('.') || token.chars().all(|character| character.is_ascii_digit()))?;
+    let volume_token = output.split_whitespace().find(|token| {
+        token.contains('.') || token.chars().all(|character| character.is_ascii_digit())
+    })?;
     let numeric = volume_token.parse::<f32>().ok()?;
     Some((numeric * 100.0).round() as i32)
 }

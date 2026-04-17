@@ -6,9 +6,11 @@ Item {
     property var theme
     property string displayName: "App"
     property string appId: ""
+    property string iconPath: ""
     property bool running: false
     property bool active: false
     property bool pinned: false
+    property bool showRunningIndicator: true
     property int magnification: 18
 
     signal activated()
@@ -16,17 +18,6 @@ Item {
 
     implicitWidth: 72
     implicitHeight: 86
-
-    readonly property real iconScale: hoverArea.containsMouse
-                                    ? (1.0 + (magnification / 100.0))
-                                    : 1.0
-
-    Behavior on iconScale {
-        NumberAnimation {
-            duration: 120
-            easing.type: Easing.OutCubic
-        }
-    }
 
     Column {
         anchors.horizontalCenter: parent.horizontalCenter
@@ -38,18 +29,24 @@ Item {
             width: 62
             height: 62
             radius: 20
-            scale: root.iconScale
+            scale: hoverArea.containsMouse ? (1.0 + (root.magnification / 100.0)) : 1.0
             color: root.active ? root.theme.accentColor : "#f6f9fd"
             border.width: 1
             border.color: root.active ? "#44ffffff" : "#5effffff"
 
-            Text {
-                anchors.centerIn: parent
-                text: root.displayName.length > 0 ? root.displayName.charAt(0).toUpperCase() : "?"
-                color: root.active ? "#ffffff" : root.theme.textPrimary
-                font.family: root.theme.displayFont
-                font.pixelSize: 22
-                font.weight: Font.DemiBold
+            Behavior on scale {
+                NumberAnimation {
+                    duration: 120
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            AppIcon {
+                anchors.fill: parent
+                theme: root.theme
+                displayName: root.displayName
+                iconPath: root.iconPath
+                textColor: root.active ? "#ffffff" : root.theme.textPrimary
             }
         }
 
@@ -59,7 +56,7 @@ Item {
             radius: 3
             color: root.active ? root.theme.accentColor : "#8aa0c9"
             anchors.horizontalCenter: parent.horizontalCenter
-            visible: root.running || root.active
+            visible: root.showRunningIndicator && (root.running || root.active)
         }
     }
 

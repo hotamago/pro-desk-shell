@@ -15,10 +15,43 @@ ApplicationWindow {
     title: "Pro Desk Shell"
     flags: Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
 
+    property bool systemMenuOpen: false
     property bool overlayOpen: shellState.launcher_open
+                               || systemMenuOpen
                                || shellState.quick_settings_open
                                || shellState.notifications_open
                                || shellState.overview_open
+
+    function closeOverlays() {
+        systemMenuOpen = false
+        shellState.close_transient_surfaces()
+    }
+
+    function toggleSystemMenu() {
+        const nextState = !systemMenuOpen
+        closeOverlays()
+        systemMenuOpen = nextState
+    }
+
+    function toggleLauncherSurface() {
+        systemMenuOpen = false
+        shellState.toggle_launcher()
+    }
+
+    function toggleOverviewSurface() {
+        systemMenuOpen = false
+        shellState.toggle_overview()
+    }
+
+    function toggleQuickSettingsSurface() {
+        systemMenuOpen = false
+        shellState.toggle_quick_settings()
+    }
+
+    function toggleNotificationSurface() {
+        systemMenuOpen = false
+        shellState.toggle_notifications()
+    }
 
     ShellTheme {
         id: theme
@@ -36,17 +69,22 @@ ApplicationWindow {
 
     Shortcut {
         sequence: "Escape"
-        onActivated: shellState.close_transient_surfaces()
+        onActivated: root.closeOverlays()
     }
 
     Shortcut {
         sequence: "Ctrl+Space"
-        onActivated: shellState.toggle_launcher()
+        onActivated: root.toggleLauncherSurface()
     }
 
     Shortcut {
         sequence: "Ctrl+Tab"
-        onActivated: shellState.toggle_overview()
+        onActivated: root.toggleOverviewSurface()
+    }
+
+    Shortcut {
+        sequence: "Ctrl+,"
+        onActivated: root.toggleSystemMenu()
     }
 
     Timer {
@@ -98,13 +136,23 @@ ApplicationWindow {
             anchors.bottomMargin: -80
             color: "#ffffff44"
         }
+
+        Image {
+            anchors.fill: parent
+            source: shellState.wallpaper_path.length > 0 ? "file://" + shellState.wallpaper_path : ""
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            cache: true
+            visible: source.toString().length > 0 && status === Image.Ready
+            opacity: 0.46
+        }
     }
 
     MouseArea {
         anchors.fill: parent
         visible: root.overlayOpen
         z: 10
-        onClicked: shellState.close_transient_surfaces()
+        onClicked: root.closeOverlays()
     }
 
     MenuBar {
@@ -116,6 +164,10 @@ ApplicationWindow {
         anchors.margins: 22
         theme: theme
         shellState: shellState
+        onSystemMenuRequested: root.toggleSystemMenu()
+        onLauncherRequested: root.toggleLauncherSurface()
+        onNotificationsRequested: root.toggleNotificationSurface()
+        onQuickSettingsRequested: root.toggleQuickSettingsSurface()
     }
 
     Dock {
@@ -128,7 +180,23 @@ ApplicationWindow {
         itemsJson: shellState.dock_items_json
         theme: theme
         shellState: shellState
+        autoHide: shellState.dock_auto_hide
+        showRunningIndicators: shellState.dock_show_running_indicators
         magnification: shellState.dock_magnification
+    }
+
+    SystemMenu {
+        z: 30
+        anchors.top: menuBar.bottom
+        anchors.left: parent.left
+        anchors.topMargin: 18
+        anchors.leftMargin: 22
+        width: 390
+        height: Math.min(parent.height - dock.height - menuBar.height - 84, 760)
+        open: root.systemMenuOpen
+        theme: theme
+        shellState: shellState
+        onCloseRequested: root.systemMenuOpen = false
     }
 
     Spotlight {

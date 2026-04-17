@@ -153,18 +153,30 @@ def configure_project(
     build_type: str,
     dry_run: bool,
 ) -> None:
-    run_command(
-        [
-            "cmake",
-            "-S",
-            str(ROOT_DIR),
-            "-B",
-            str(build_dir),
-            f"-DCMAKE_BUILD_TYPE={build_type}",
-            f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
-        ],
-        dry_run=dry_run,
-    )
+    ensure_compatible_build_dir(build_dir, dry_run=dry_run)
+    command = [
+        "cmake",
+        "-S",
+        str(ROOT_DIR),
+        "-B",
+        str(build_dir),
+        f"-DCMAKE_BUILD_TYPE={build_type}",
+        f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
+    ]
+
+    try:
+        run_command(command, dry_run=dry_run)
+    except subprocess.CalledProcessError as error:
+        if dry_run or not generator_mismatch_detected(error):
+            raise
+
+        print(
+            f"Detected a CMake generator mismatch in '{build_dir}'. "
+            "Cleaning generator-specific metadata and retrying.",
+            flush=True,
+        )
+        clean_build_metadata(build_dir, dry_run=dry_run)
+        run_command(command, dry_run=dry_run)
 
 
 def build_project(build_dir: Path, dry_run: bool) -> None:
@@ -178,6 +190,64 @@ def install_project(build_dir: Path, dry_run: bool) -> None:
 def run_binary(build_dir: Path, dry_run: bool) -> None:
     binary_path = build_dir / "pro-desk-shell"
     run_command([str(binary_path)], dry_run=dry_run)
+
+
+def generator_mismatch_detected(error: subprocess.CalledProcessError) -> bool:
+    return error.returncode != 0
+
+
+def requested_cmake_generator() -> str | None:
+    value = os.environ.get("CMAKE_GENERATOR", "").strip()
+    return value or None
+
+
+def cached_cmake_generator(build_dir: Path) -> str | None:
+    cache_path = build_dir / "CMakeCache.txt"
+    if not cache_path.exists():
+        return None
+
+    for raw_line in cache_path.read_text(encoding="utf-8").splitlines():
+        if raw_line.startswith("CMAKE_GENERATOR:INTERNAL="):
+            return raw_line.split("=", 1)[1].strip() or None
+
+    return None
+
+
+def clean_build_metadata(build_dir: Path, *, dry_run: bool) -> None:
+    paths_to_remove = (
+        build_dir / "CMakeCache.txt",
+        build_dir / "CMakeFiles",
+        build_dir / ".cmake",
+        build_dir / "_deps",
+    )
+
+    for path in paths_to_remove:
+        if not path.exists():
+            continue
+
+        print(f"+ rm -rf {path}", flush=True)
+        if dry_run:
+            continue
+
+        if path.is_dir():
+            shutil.rmtree(path)
+        else:
+            path.unlink()
+
+
+def ensure_compatible_build_dir(build_dir: Path, *, dry_run: bool) -> None:
+    requested = requested_cmake_generator()
+    cached = cached_cmake_generator(build_dir)
+
+    if requested is None or cached is None or requested == cached:
+        return
+
+    print(
+        f"Detected cached CMake generator '{cached}' but current environment requests "
+        f"'{requested}'. Cleaning build metadata in '{build_dir}'.",
+        flush=True,
+    )
+    clean_build_metadata(build_dir, dry_run=dry_run)
 
 
 def install_dependencies(

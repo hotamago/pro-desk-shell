@@ -1,13 +1,7 @@
 use shell_core::{
-    PlaybackStatus,
-    ShellAction,
+    parse_brightnessctl_machine_output, parse_nmcli_active_wifi, parse_playerctl_metadata_output,
+    parse_upower_output, parse_wpctl_volume_output, reduce_ui_state, PlaybackStatus, ShellAction,
     ShellUiState,
-    parse_brightnessctl_machine_output,
-    parse_nmcli_active_wifi,
-    parse_playerctl_metadata_output,
-    parse_upower_output,
-    parse_wpctl_volume_output,
-    reduce_ui_state,
 };
 
 #[test]

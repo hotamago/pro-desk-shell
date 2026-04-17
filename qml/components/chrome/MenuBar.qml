@@ -9,12 +9,18 @@ FrostedPanel {
 
     property var theme
     property var shellState
+    property bool compactMode: shellState ? shellState.menu_bar_compact_mode : false
 
-    radius: 26
-    padding: 14
+    signal systemMenuRequested()
+    signal launcherRequested()
+    signal notificationsRequested()
+    signal quickSettingsRequested()
+
+    radius: compactMode ? 22 : 26
+    padding: compactMode ? 10 : 14
     fillColor: "#d6f7fbff"
     borderColor: "#96ffffff"
-    implicitHeight: 68
+    implicitHeight: compactMode ? 56 : 68
 
     RowLayout {
         anchors.fill: parent
@@ -26,9 +32,16 @@ FrostedPanel {
 
             GlassButton {
                 theme: root.theme
-                text: "shell"
+                text: "menu"
                 accented: true
-                onClicked: root.shellState.toggle_launcher()
+                onClicked: root.systemMenuRequested()
+            }
+
+            GlassButton {
+                theme: root.theme
+                text: "spotlight"
+                quiet: true
+                onClicked: root.launcherRequested()
             }
 
             Label {
@@ -61,6 +74,7 @@ FrostedPanel {
             }
 
             Label {
+                visible: !root.compactMode
                 Layout.alignment: Qt.AlignHCenter
                 text: root.shellState.active_window_class.length > 0
                       ? root.shellState.active_window_class
@@ -114,13 +128,13 @@ FrostedPanel {
             GlassButton {
                 theme: root.theme
                 text: "notify " + root.shellState.notification_count
-                onClicked: root.shellState.toggle_notifications()
+                onClicked: root.notificationsRequested()
             }
 
             GlassButton {
                 theme: root.theme
                 text: "control"
-                onClicked: root.shellState.toggle_quick_settings()
+                onClicked: root.quickSettingsRequested()
             }
         }
     }

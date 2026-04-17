@@ -110,6 +110,7 @@ pub struct AppEntrySummary {
     app_id: String,
     display_name: String,
     icon_name: String,
+    icon_path: String,
     exec_command: String,
     keywords: Vec<String>,
     startup_wm_class: String,
@@ -128,6 +129,7 @@ impl AppEntrySummary {
             app_id: app_id.into(),
             display_name: display_name.into(),
             icon_name: icon_name.into(),
+            icon_path: String::new(),
             exec_command: exec_command.into(),
             keywords,
             startup_wm_class: startup_wm_class.into(),
@@ -146,6 +148,10 @@ impl AppEntrySummary {
         &self.icon_name
     }
 
+    pub fn icon_path(&self) -> &str {
+        &self.icon_path
+    }
+
     pub fn exec_command(&self) -> &str {
         &self.exec_command
     }
@@ -157,6 +163,11 @@ impl AppEntrySummary {
     pub fn startup_wm_class(&self) -> &str {
         &self.startup_wm_class
     }
+
+    pub fn with_icon_path(mut self, icon_path: impl Into<String>) -> Self {
+        self.icon_path = icon_path.into();
+        self
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -164,6 +175,7 @@ pub struct DockItemSummary {
     app_id: String,
     display_name: String,
     icon_name: String,
+    icon_path: String,
     pinned: bool,
     running: bool,
     active: bool,
@@ -184,6 +196,7 @@ impl DockItemSummary {
             app_id: app_id.into(),
             display_name: display_name.into(),
             icon_name: icon_name.into(),
+            icon_path: String::new(),
             pinned,
             running,
             active,
@@ -203,6 +216,10 @@ impl DockItemSummary {
         &self.icon_name
     }
 
+    pub fn icon_path(&self) -> &str {
+        &self.icon_path
+    }
+
     pub fn is_pinned(&self) -> bool {
         self.pinned
     }
@@ -217,6 +234,11 @@ impl DockItemSummary {
 
     pub fn window_count(&self) -> usize {
         self.window_count
+    }
+
+    pub fn with_icon_path(mut self, icon_path: impl Into<String>) -> Self {
+        self.icon_path = icon_path.into();
+        self
     }
 }
 
@@ -897,6 +919,9 @@ pub fn derive_dock_items(
             let icon_name = app
                 .map(|entry| entry.icon_name().to_owned())
                 .unwrap_or_default();
+            let icon_path = app
+                .map(|entry| entry.icon_path().to_owned())
+                .unwrap_or_default();
             let window_count = running_counts.get(&app_id).copied().unwrap_or_default();
             DockItemSummary::new(
                 app_id.clone(),
@@ -907,6 +932,7 @@ pub fn derive_dock_items(
                 active_app_ids.contains(&app_id),
                 window_count,
             )
+            .with_icon_path(icon_path)
         })
         .collect()
 }
@@ -1090,52 +1116,56 @@ pub fn take_action_request() -> Result<Option<ShellAction>, String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppEntrySummary,
-        WindowSummary,
-        WorkspaceSummary,
-        build_notification_summary,
-        derive_dock_items,
-        group_windows_by_workspace,
-        NotificationItemSummary,
+        build_notification_summary, derive_dock_items, group_windows_by_workspace, AppEntrySummary,
+        NotificationItemSummary, WindowSummary, WorkspaceSummary,
     };
 
     #[test]
     fn derives_dock_state_from_pins_and_windows() {
         let apps = vec![
-            AppEntrySummary::new("firefox", "Firefox", "firefox", "firefox", Vec::new(), "firefox"),
-            AppEntrySummary::new("kitty", "Terminal", "terminal", "kitty", Vec::new(), "kitty"),
+            AppEntrySummary::new(
+                "firefox",
+                "Firefox",
+                "firefox",
+                "firefox",
+                Vec::new(),
+                "firefox",
+            )
+            .with_icon_path("/tmp/firefox.png"),
+            AppEntrySummary::new(
+                "kitty",
+                "Terminal",
+                "terminal",
+                "kitty",
+                Vec::new(),
+                "kitty",
+            ),
         ];
         let windows = vec![WindowSummary::new(
-            "1",
-            "project",
-            "firefox",
-            "firefox",
-            1,
-            "Desktop",
-            true,
-            false,
-            false,
+            "1", "project", "firefox", "firefox", 1, "Desktop", true, false, false,
         )];
 
         let dock = derive_dock_items(&[String::from("kitty")], &apps, &windows);
         assert_eq!(dock.len(), 2);
-        assert!(dock.iter().any(|item| item.app_id() == "kitty" && item.is_pinned()));
-        assert!(dock.iter().any(|item| item.app_id() == "firefox" && item.is_running()));
+        assert!(dock
+            .iter()
+            .any(|item| item.app_id() == "kitty" && item.is_pinned()));
+        assert!(dock
+            .iter()
+            .any(|item| item.app_id() == "firefox" && item.is_running()));
+        assert_eq!(
+            dock.iter()
+                .find(|item| item.app_id() == "firefox")
+                .map(|item| item.icon_path()),
+            Some("/tmp/firefox.png")
+        );
     }
 
     #[test]
     fn groups_windows_for_mission_control() {
         let workspaces = vec![WorkspaceSummary::with_state(1, "Desktop", true, 1)];
         let windows = vec![WindowSummary::new(
-            "1",
-            "project",
-            "kitty",
-            "kitty",
-            1,
-            "Desktop",
-            true,
-            false,
-            false,
+            "1", "project", "kitty", "kitty", 1, "Desktop", true, false, false,
         )];
 
         let groups = group_windows_by_workspace(&workspaces, &windows);
