@@ -1,3 +1,4 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
 use std::str::FromStr;
@@ -24,7 +25,12 @@ impl WorkspaceSummary {
         }
     }
 
-    pub fn with_state(id: i32, name: impl Into<String>, is_active: bool, window_count: usize) -> Self {
+    pub fn with_state(
+        id: i32,
+        name: impl Into<String>,
+        is_active: bool,
+        window_count: usize,
+    ) -> Self {
         Self {
             id,
             name: name.into(),
@@ -96,6 +102,237 @@ impl ActiveWindowSummary {
 
     pub fn is_fullscreen(&self) -> bool {
         self.is_fullscreen
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AppEntrySummary {
+    app_id: String,
+    display_name: String,
+    icon_name: String,
+    exec_command: String,
+    keywords: Vec<String>,
+    startup_wm_class: String,
+}
+
+impl AppEntrySummary {
+    pub fn new(
+        app_id: impl Into<String>,
+        display_name: impl Into<String>,
+        icon_name: impl Into<String>,
+        exec_command: impl Into<String>,
+        keywords: Vec<String>,
+        startup_wm_class: impl Into<String>,
+    ) -> Self {
+        Self {
+            app_id: app_id.into(),
+            display_name: display_name.into(),
+            icon_name: icon_name.into(),
+            exec_command: exec_command.into(),
+            keywords,
+            startup_wm_class: startup_wm_class.into(),
+        }
+    }
+
+    pub fn app_id(&self) -> &str {
+        &self.app_id
+    }
+
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    pub fn icon_name(&self) -> &str {
+        &self.icon_name
+    }
+
+    pub fn exec_command(&self) -> &str {
+        &self.exec_command
+    }
+
+    pub fn keywords(&self) -> &[String] {
+        &self.keywords
+    }
+
+    pub fn startup_wm_class(&self) -> &str {
+        &self.startup_wm_class
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DockItemSummary {
+    app_id: String,
+    display_name: String,
+    icon_name: String,
+    pinned: bool,
+    running: bool,
+    active: bool,
+    window_count: usize,
+}
+
+impl DockItemSummary {
+    pub fn new(
+        app_id: impl Into<String>,
+        display_name: impl Into<String>,
+        icon_name: impl Into<String>,
+        pinned: bool,
+        running: bool,
+        active: bool,
+        window_count: usize,
+    ) -> Self {
+        Self {
+            app_id: app_id.into(),
+            display_name: display_name.into(),
+            icon_name: icon_name.into(),
+            pinned,
+            running,
+            active,
+            window_count,
+        }
+    }
+
+    pub fn app_id(&self) -> &str {
+        &self.app_id
+    }
+
+    pub fn display_name(&self) -> &str {
+        &self.display_name
+    }
+
+    pub fn icon_name(&self) -> &str {
+        &self.icon_name
+    }
+
+    pub fn is_pinned(&self) -> bool {
+        self.pinned
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+
+    pub fn window_count(&self) -> usize {
+        self.window_count
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WindowSummary {
+    window_id: String,
+    title: String,
+    class_name: String,
+    app_id: String,
+    workspace_id: i32,
+    workspace_name: String,
+    focused: bool,
+    floating: bool,
+    fullscreen: bool,
+}
+
+impl WindowSummary {
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        window_id: impl Into<String>,
+        title: impl Into<String>,
+        class_name: impl Into<String>,
+        app_id: impl Into<String>,
+        workspace_id: i32,
+        workspace_name: impl Into<String>,
+        focused: bool,
+        floating: bool,
+        fullscreen: bool,
+    ) -> Self {
+        Self {
+            window_id: window_id.into(),
+            title: title.into(),
+            class_name: class_name.into(),
+            app_id: app_id.into(),
+            workspace_id,
+            workspace_name: workspace_name.into(),
+            focused,
+            floating,
+            fullscreen,
+        }
+    }
+
+    pub fn window_id(&self) -> &str {
+        &self.window_id
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn class_name(&self) -> &str {
+        &self.class_name
+    }
+
+    pub fn app_id(&self) -> &str {
+        &self.app_id
+    }
+
+    pub fn workspace_id(&self) -> i32 {
+        self.workspace_id
+    }
+
+    pub fn workspace_name(&self) -> &str {
+        &self.workspace_name
+    }
+
+    pub fn is_focused(&self) -> bool {
+        self.focused
+    }
+
+    pub fn is_floating(&self) -> bool {
+        self.floating
+    }
+
+    pub fn is_fullscreen(&self) -> bool {
+        self.fullscreen
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MissionControlWorkspaceSummary {
+    workspace_id: i32,
+    workspace_name: String,
+    is_active: bool,
+    windows: Vec<WindowSummary>,
+}
+
+impl MissionControlWorkspaceSummary {
+    pub fn new(
+        workspace_id: i32,
+        workspace_name: impl Into<String>,
+        is_active: bool,
+        windows: Vec<WindowSummary>,
+    ) -> Self {
+        Self {
+            workspace_id,
+            workspace_name: workspace_name.into(),
+            is_active,
+            windows,
+        }
+    }
+
+    pub fn workspace_id(&self) -> i32 {
+        self.workspace_id
+    }
+
+    pub fn workspace_name(&self) -> &str {
+        &self.workspace_name
+    }
+
+    pub fn is_active(&self) -> bool {
+        self.is_active
+    }
+
+    pub fn windows(&self) -> &[WindowSummary] {
+        &self.windows
     }
 }
 
@@ -194,6 +431,67 @@ impl NetworkSummary {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NotificationItemSummary {
+    notification_id: String,
+    app_name: String,
+    title: String,
+    body: String,
+    timestamp: String,
+    urgency: String,
+    dismissed: bool,
+}
+
+impl NotificationItemSummary {
+    pub fn new(
+        notification_id: impl Into<String>,
+        app_name: impl Into<String>,
+        title: impl Into<String>,
+        body: impl Into<String>,
+        timestamp: impl Into<String>,
+        urgency: impl Into<String>,
+        dismissed: bool,
+    ) -> Self {
+        Self {
+            notification_id: notification_id.into(),
+            app_name: app_name.into(),
+            title: title.into(),
+            body: body.into(),
+            timestamp: timestamp.into(),
+            urgency: urgency.into(),
+            dismissed,
+        }
+    }
+
+    pub fn notification_id(&self) -> &str {
+        &self.notification_id
+    }
+
+    pub fn app_name(&self) -> &str {
+        &self.app_name
+    }
+
+    pub fn title(&self) -> &str {
+        &self.title
+    }
+
+    pub fn body(&self) -> &str {
+        &self.body
+    }
+
+    pub fn timestamp(&self) -> &str {
+        &self.timestamp
+    }
+
+    pub fn urgency(&self) -> &str {
+        &self.urgency
+    }
+
+    pub fn is_dismissed(&self) -> bool {
+        self.dismissed
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NotificationSummary {
     unread_count: i32,
     latest_title: String,
@@ -201,7 +499,11 @@ pub struct NotificationSummary {
 }
 
 impl NotificationSummary {
-    pub fn new(unread_count: i32, latest_title: impl Into<String>, latest_body: impl Into<String>) -> Self {
+    pub fn new(
+        unread_count: i32,
+        latest_title: impl Into<String>,
+        latest_body: impl Into<String>,
+    ) -> Self {
         Self {
             unread_count,
             latest_title: latest_title.into(),
@@ -280,10 +582,16 @@ pub struct ShellSnapshot {
     workspaces: Vec<WorkspaceSummary>,
     active_workspace: Option<String>,
     active_window: ActiveWindowSummary,
+    active_app_id: Option<String>,
+    app_catalog: Vec<AppEntrySummary>,
+    dock_items: Vec<DockItemSummary>,
+    windows: Vec<WindowSummary>,
+    mission_control_workspaces: Vec<MissionControlWorkspaceSummary>,
     media: MediaSummary,
     battery: BatterySummary,
     network: NetworkSummary,
     notifications: NotificationSummary,
+    notification_history: Vec<NotificationItemSummary>,
     quick_settings: QuickSettingsSummary,
     capabilities: ShellCapabilities,
 }
@@ -295,10 +603,16 @@ impl ShellSnapshot {
         workspaces: Vec<WorkspaceSummary>,
         active_workspace: Option<String>,
         active_window: ActiveWindowSummary,
+        active_app_id: Option<String>,
+        app_catalog: Vec<AppEntrySummary>,
+        dock_items: Vec<DockItemSummary>,
+        windows: Vec<WindowSummary>,
+        mission_control_workspaces: Vec<MissionControlWorkspaceSummary>,
         media: MediaSummary,
         battery: BatterySummary,
         network: NetworkSummary,
         notifications: NotificationSummary,
+        notification_history: Vec<NotificationItemSummary>,
         quick_settings: QuickSettingsSummary,
         capabilities: ShellCapabilities,
     ) -> Self {
@@ -307,10 +621,16 @@ impl ShellSnapshot {
             workspaces,
             active_workspace,
             active_window,
+            active_app_id,
+            app_catalog,
+            dock_items,
+            windows,
+            mission_control_workspaces,
             media,
             battery,
             network,
             notifications,
+            notification_history,
             quick_settings,
             capabilities,
         }
@@ -318,16 +638,121 @@ impl ShellSnapshot {
 
     pub fn placeholder() -> Self {
         let capabilities = ShellCapabilities::detect();
+        let workspaces = vec![
+            WorkspaceSummary::with_state(1, "Desktop", true, 2),
+            WorkspaceSummary::with_state(2, "Studio", false, 2),
+            WorkspaceSummary::with_state(3, "Comms", false, 1),
+        ];
+        let app_catalog = vec![
+            AppEntrySummary::new(
+                "org.gnome.Nautilus",
+                "Files",
+                "folder",
+                "nautilus --new-window",
+                vec![String::from("files"), String::from("finder")],
+                "org.gnome.Nautilus",
+            ),
+            AppEntrySummary::new(
+                "firefox",
+                "Firefox",
+                "firefox",
+                "firefox",
+                vec![String::from("browser"), String::from("web")],
+                String::from("firefox"),
+            ),
+            AppEntrySummary::new(
+                "kitty",
+                "Terminal",
+                "terminal",
+                "kitty -1",
+                vec![String::from("terminal"), String::from("shell")],
+                String::from("kitty"),
+            ),
+            AppEntrySummary::new(
+                "code",
+                "Code",
+                "code",
+                "code",
+                vec![String::from("editor"), String::from("dev")],
+                String::from("code"),
+            ),
+        ];
+        let windows = vec![
+            WindowSummary::new(
+                "preview-firefox",
+                "Product board",
+                "firefox",
+                "firefox",
+                1,
+                "Desktop",
+                true,
+                false,
+                false,
+            ),
+            WindowSummary::new(
+                "preview-kitty",
+                "shell-dev",
+                "kitty",
+                "kitty",
+                2,
+                "Studio",
+                false,
+                false,
+                false,
+            ),
+            WindowSummary::new(
+                "preview-code",
+                "pro-desk-shell",
+                "code",
+                "code",
+                2,
+                "Studio",
+                false,
+                false,
+                false,
+            ),
+        ];
+        let dock_items = derive_dock_items(
+            &[
+                String::from("org.gnome.Nautilus"),
+                String::from("firefox"),
+                String::from("kitty"),
+                String::from("code"),
+            ],
+            &app_catalog,
+            &windows,
+        );
+        let notification_history = vec![
+            NotificationItemSummary::new(
+                "preview-1",
+                "Shell",
+                "Shell ready",
+                "The rewritten shell bridge is feeding the new desktop surfaces.",
+                "Now",
+                "normal",
+                false,
+            ),
+            NotificationItemSummary::new(
+                "preview-2",
+                "Hyprland",
+                "Preview mode",
+                "Run inside Hyprland to turn placeholder windows into live compositor state.",
+                "2m ago",
+                "low",
+                false,
+            ),
+        ];
 
         Self::new(
             Some(String::from("Hyprland")),
-            vec![
-                WorkspaceSummary::with_state(1, "1:web", true, 3),
-                WorkspaceSummary::with_state(2, "2:code", false, 5),
-                WorkspaceSummary::with_state(3, "3:chat", false, 2),
-            ],
-            Some(String::from("1:web")),
-            ActiveWindowSummary::with_state("Pro Desk Shell Rebuild Board", "org.gnome.TextEditor", false, false),
+            workspaces.clone(),
+            Some(String::from("Desktop")),
+            ActiveWindowSummary::with_state("Product board", "firefox", false, false),
+            Some(String::from("firefox")),
+            app_catalog.clone(),
+            dock_items,
+            windows.clone(),
+            group_windows_by_workspace(&workspaces, &windows),
             MediaSummary::new(
                 "playerctl",
                 "Night Drive",
@@ -336,11 +761,8 @@ impl ShellSnapshot {
             ),
             BatterySummary::new(84, true),
             NetworkSummary::new("Studio Mesh", "Connected"),
-            NotificationSummary::new(
-                3,
-                "Shell ready",
-                "Core shell surfaces are connected to the Rust bridge.",
-            ),
+            build_notification_summary(&notification_history),
+            notification_history,
             QuickSettingsSummary::new(58, 72),
             capabilities,
         )
@@ -358,12 +780,32 @@ impl ShellSnapshot {
             .unwrap_or("workspace:unknown")
     }
 
+    pub fn active_app_id(&self) -> Option<&str> {
+        self.active_app_id.as_deref()
+    }
+
     pub fn workspaces(&self) -> &[WorkspaceSummary] {
         &self.workspaces
     }
 
     pub fn active_window(&self) -> &ActiveWindowSummary {
         &self.active_window
+    }
+
+    pub fn app_catalog(&self) -> &[AppEntrySummary] {
+        &self.app_catalog
+    }
+
+    pub fn dock_items(&self) -> &[DockItemSummary] {
+        &self.dock_items
+    }
+
+    pub fn windows(&self) -> &[WindowSummary] {
+        &self.windows
+    }
+
+    pub fn mission_control_workspaces(&self) -> &[MissionControlWorkspaceSummary] {
+        &self.mission_control_workspaces
     }
 
     pub fn media(&self) -> &MediaSummary {
@@ -382,6 +824,14 @@ impl ShellSnapshot {
         &self.notifications
     }
 
+    pub fn notification_history(&self) -> &[NotificationItemSummary] {
+        &self.notification_history
+    }
+
+    pub fn notification_history_mut(&mut self) -> &mut Vec<NotificationItemSummary> {
+        &mut self.notification_history
+    }
+
     pub fn quick_settings(&self) -> &QuickSettingsSummary {
         &self.quick_settings
     }
@@ -395,6 +845,121 @@ impl ShellSnapshot {
             .iter()
             .map(|workspace| workspace.name().to_owned())
             .collect()
+    }
+
+    pub fn refresh_notification_summary(&mut self) {
+        self.notifications = build_notification_summary(&self.notification_history);
+    }
+}
+
+pub fn derive_dock_items(
+    pinned_app_ids: &[String],
+    app_catalog: &[AppEntrySummary],
+    windows: &[WindowSummary],
+) -> Vec<DockItemSummary> {
+    let app_catalog_map = app_catalog
+        .iter()
+        .map(|app| (app.app_id().to_owned(), app))
+        .collect::<BTreeMap<_, _>>();
+    let mut ordered_app_ids = Vec::new();
+    let mut seen_app_ids = BTreeSet::new();
+
+    for pinned_app_id in pinned_app_ids {
+        if seen_app_ids.insert(pinned_app_id.clone()) {
+            ordered_app_ids.push(pinned_app_id.clone());
+        }
+    }
+
+    let mut running_counts = BTreeMap::<String, usize>::new();
+    let mut active_app_ids = BTreeSet::<String>::new();
+    for window in windows {
+        let app_id = if window.app_id().trim().is_empty() {
+            window.class_name().to_owned()
+        } else {
+            window.app_id().to_owned()
+        };
+        *running_counts.entry(app_id.clone()).or_insert(0) += 1;
+        if window.is_focused() {
+            active_app_ids.insert(app_id.clone());
+        }
+        if seen_app_ids.insert(app_id.clone()) {
+            ordered_app_ids.push(app_id);
+        }
+    }
+
+    ordered_app_ids
+        .into_iter()
+        .map(|app_id| {
+            let app = app_catalog_map.get(&app_id);
+            let display_name = app
+                .map(|entry| entry.display_name().to_owned())
+                .unwrap_or_else(|| app_id.clone());
+            let icon_name = app
+                .map(|entry| entry.icon_name().to_owned())
+                .unwrap_or_default();
+            let window_count = running_counts.get(&app_id).copied().unwrap_or_default();
+            DockItemSummary::new(
+                app_id.clone(),
+                display_name,
+                icon_name,
+                pinned_app_ids.iter().any(|candidate| candidate == &app_id),
+                window_count > 0,
+                active_app_ids.contains(&app_id),
+                window_count,
+            )
+        })
+        .collect()
+}
+
+pub fn group_windows_by_workspace(
+    workspaces: &[WorkspaceSummary],
+    windows: &[WindowSummary],
+) -> Vec<MissionControlWorkspaceSummary> {
+    let mut grouped = workspaces
+        .iter()
+        .map(|workspace| {
+            let windows = windows
+                .iter()
+                .filter(|window| window.workspace_id() == workspace.id())
+                .cloned()
+                .collect::<Vec<_>>();
+            MissionControlWorkspaceSummary::new(
+                workspace.id(),
+                workspace.name().to_owned(),
+                workspace.is_active(),
+                windows,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    for window in windows {
+        let exists = grouped
+            .iter()
+            .any(|workspace| workspace.workspace_id() == window.workspace_id());
+        if !exists {
+            grouped.push(MissionControlWorkspaceSummary::new(
+                window.workspace_id(),
+                window.workspace_name().to_owned(),
+                false,
+                vec![window.clone()],
+            ));
+        }
+    }
+
+    grouped.sort_by_key(MissionControlWorkspaceSummary::workspace_id);
+    grouped
+}
+
+pub fn build_notification_summary(history: &[NotificationItemSummary]) -> NotificationSummary {
+    let unread_count = history.iter().filter(|item| !item.is_dismissed()).count() as i32;
+    let latest = history
+        .iter()
+        .find(|item| !item.is_dismissed())
+        .or_else(|| history.first());
+
+    match latest {
+        Some(item) => NotificationSummary::new(unread_count, item.title(), item.body()),
+        None => NotificationSummary::new(0, "No notifications", "The shell is quiet right now."),
     }
 }
 
@@ -464,16 +1029,24 @@ pub fn reduce_ui_state(ui_state: &mut ShellUiState, action: ShellAction) {
         ShellAction::LauncherToggle => {
             ui_state.launcher_open = !ui_state.launcher_open;
             ui_state.overview_open = false;
+            ui_state.notifications_open = false;
+            ui_state.quick_settings_open = false;
         }
         ShellAction::OverviewToggle => {
             ui_state.overview_open = !ui_state.overview_open;
             ui_state.launcher_open = false;
+            ui_state.notifications_open = false;
+            ui_state.quick_settings_open = false;
         }
         ShellAction::NotificationsToggle => {
             ui_state.notifications_open = !ui_state.notifications_open;
+            ui_state.quick_settings_open = false;
+            ui_state.launcher_open = false;
         }
         ShellAction::QuickSettingsToggle => {
             ui_state.quick_settings_open = !ui_state.quick_settings_open;
+            ui_state.notifications_open = false;
+            ui_state.launcher_open = false;
         }
         ShellAction::WallpaperToggle => {
             ui_state.wallpaper_selector_open = !ui_state.wallpaper_selector_open;
@@ -512,4 +1085,78 @@ pub fn take_action_request() -> Result<Option<ShellAction>, String> {
     fs::remove_file(&mailbox)
         .map_err(|error| format!("Could not clear '{}': {error}", mailbox.display()))?;
     Ok(action)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        AppEntrySummary,
+        WindowSummary,
+        WorkspaceSummary,
+        build_notification_summary,
+        derive_dock_items,
+        group_windows_by_workspace,
+        NotificationItemSummary,
+    };
+
+    #[test]
+    fn derives_dock_state_from_pins_and_windows() {
+        let apps = vec![
+            AppEntrySummary::new("firefox", "Firefox", "firefox", "firefox", Vec::new(), "firefox"),
+            AppEntrySummary::new("kitty", "Terminal", "terminal", "kitty", Vec::new(), "kitty"),
+        ];
+        let windows = vec![WindowSummary::new(
+            "1",
+            "project",
+            "firefox",
+            "firefox",
+            1,
+            "Desktop",
+            true,
+            false,
+            false,
+        )];
+
+        let dock = derive_dock_items(&[String::from("kitty")], &apps, &windows);
+        assert_eq!(dock.len(), 2);
+        assert!(dock.iter().any(|item| item.app_id() == "kitty" && item.is_pinned()));
+        assert!(dock.iter().any(|item| item.app_id() == "firefox" && item.is_running()));
+    }
+
+    #[test]
+    fn groups_windows_for_mission_control() {
+        let workspaces = vec![WorkspaceSummary::with_state(1, "Desktop", true, 1)];
+        let windows = vec![WindowSummary::new(
+            "1",
+            "project",
+            "kitty",
+            "kitty",
+            1,
+            "Desktop",
+            true,
+            false,
+            false,
+        )];
+
+        let groups = group_windows_by_workspace(&workspaces, &windows);
+        assert_eq!(groups.len(), 1);
+        assert_eq!(groups[0].windows().len(), 1);
+    }
+
+    #[test]
+    fn builds_notification_summary_from_history() {
+        let history = vec![NotificationItemSummary::new(
+            "1",
+            "Shell",
+            "Ready",
+            "Everything is up.",
+            "Now",
+            "normal",
+            false,
+        )];
+
+        let summary = build_notification_summary(&history);
+        assert_eq!(summary.unread_count(), 1);
+        assert_eq!(summary.latest_title(), "Ready");
+    }
 }

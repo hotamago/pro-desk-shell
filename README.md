@@ -1,7 +1,7 @@
 # Pro Desk Shell
 
 Pro Desk Shell is a Fedora-first Hyprland desktop shell built with `Qt6`, `QML`, `CMake`, `layer-shell-qt`, and `Rust`.
-The repository now includes a real shell foundation: a top bar, launcher, notification center, quick settings surface, wallpaper/theme controls, a session surface, and a settings window backed by a Rust bridge.
+The repository now includes a rewritten shell foundation aimed at a real desktop-shell experience: a menu bar, dock, Spotlight-style launcher, Control Center, Notification Center, and Mission Control-style workspace overview backed by a Rust bridge.
 
 The architecture stays intentionally split:
 
@@ -16,17 +16,19 @@ The architecture stays intentionally split:
 
 Current shell work includes:
 
-- an `ii`-inspired shell UI rebuilt locally in this repo
+- a macOS-inspired shell core rebuilt locally in this repo
 - persisted config at `~/.config/pro-desk-shell/config.json`
 - runtime state at `~/.local/state/pro-desk-shell`
 - Hyprland snapshot loading for workspaces and active window state
+- XDG desktop-entry indexing for app search and launch
 - a mailbox-based action bridge for Hyprland keybind dispatch
 - managed Hyprland fragments installable through `./devsh install-hyprland`
 
 Current limitations:
 
 - the shell is still v1 and does not yet implement every planned desktop feature
-- several long-tail services remain deferred, including clipboard history, OCR/screen tools, AI/chat, weather, and tray hosting
+- Mission Control currently uses window metadata cards rather than live thumbnails
+- several long-tail services remain deferred, including clipboard history, OCR/screen tools, AI/chat, weather, wallpaper services, and tray hosting
 - Fedora is the only fully implemented bootstrap target today
 
 ## Getting started
@@ -119,12 +121,12 @@ CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo build --manifest-path rust
 Contributions are welcome around:
 
 - Hyprland IPC hardening
-- richer shell services and panels
+- richer shell services and desktop integrations
 - QML surface polish and animation work
 - Fedora packaging and release automation
 - distro adapter work beyond Fedora
 
-Start with [Contributor Guide](./docs/contributing.md) and [Bootstrap Architecture](./docs/architecture/bootstrap.md).
+Start with [Contributor Guide](./docs/contributing.md), [Bootstrap Architecture](./docs/architecture/bootstrap.md), and the shell continuation docs in [`docs/plan.md`](./docs/plan.md), [`docs/todo.md`](./docs/todo.md), and [`docs/timeline.md`](./docs/timeline.md).
 
 ## License
 

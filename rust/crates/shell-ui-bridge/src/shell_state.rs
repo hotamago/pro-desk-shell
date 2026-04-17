@@ -5,6 +5,7 @@ use cxx_qt_lib::{QList, QString, QStringList};
 #[allow(unused_imports)]
 use core::pin::Pin;
 use shell_core::{
+    NotificationItemSummary,
     ShellAction,
     ShellConfig,
     ShellSnapshot,
@@ -13,6 +14,7 @@ use shell_core::{
     load_or_create_config,
     persist_config,
     reduce_ui_state,
+    search_app_entries,
     state_dir,
     take_action_request,
 };
@@ -34,6 +36,7 @@ mod ffi {
         #[qproperty(String, active_workspace)]
         #[qproperty(String, active_window_title)]
         #[qproperty(String, active_window_class)]
+        #[qproperty(String, active_app_id)]
         #[qproperty(String, media_title)]
         #[qproperty(String, media_artist)]
         #[qproperty(bool, media_playing)]
@@ -42,12 +45,11 @@ mod ffi {
         #[qproperty(i32, battery_percent)]
         #[qproperty(bool, battery_charging)]
         #[qproperty(i32, notification_count)]
-        #[qproperty(String, latest_notification_title)]
-        #[qproperty(String, latest_notification_body)]
         #[qproperty(i32, volume_percent)]
         #[qproperty(i32, brightness_percent)]
         #[qproperty(bool, has_hyprland)]
         #[qproperty(bool, has_playerctl)]
+        #[qproperty(bool, has_wpctl)]
         #[qproperty(bool, has_brightnessctl)]
         #[qproperty(bool, has_nmcli)]
         #[qproperty(bool, has_upower)]
@@ -55,21 +57,21 @@ mod ffi {
         #[qproperty(bool, overview_open)]
         #[qproperty(bool, notifications_open)]
         #[qproperty(bool, quick_settings_open)]
-        #[qproperty(bool, wallpaper_selector_open)]
-        #[qproperty(bool, session_open)]
-        #[qproperty(bool, settings_open)]
-        #[qproperty(bool, transparency_enabled)]
-        #[qproperty(bool, bar_dense)]
         #[qproperty(String, accent_color)]
-        #[qproperty(String, accent_color_secondary)]
-        #[qproperty(String, accent_color_tertiary)]
-        #[qproperty(String, theme_name)]
+        #[qproperty(String, style_preset)]
         #[qproperty(String, wallpaper_path)]
         #[qproperty(String, terminal_command)]
         #[qproperty(String, config_path)]
         #[qproperty(String, state_path)]
-        #[qproperty(i32, panel_height)]
         #[qproperty(String, status_line)]
+        #[qproperty(String, app_catalog_json)]
+        #[qproperty(String, dock_items_json)]
+        #[qproperty(String, window_items_json)]
+        #[qproperty(String, mission_control_json)]
+        #[qproperty(String, notification_items_json)]
+        #[qproperty(String, search_results_json)]
+        #[qproperty(String, launcher_query)]
+        #[qproperty(i32, dock_magnification)]
         type ShellState = super::ShellStateRust;
 
         #[qinvokable]
@@ -91,15 +93,6 @@ mod ffi {
         fn toggle_quick_settings(self: Pin<&mut ShellState>);
 
         #[qinvokable]
-        fn toggle_wallpaper_selector(self: Pin<&mut ShellState>);
-
-        #[qinvokable]
-        fn toggle_session(self: Pin<&mut ShellState>);
-
-        #[qinvokable]
-        fn toggle_settings(self: Pin<&mut ShellState>);
-
-        #[qinvokable]
         fn request_lock(self: Pin<&mut ShellState>);
 
         #[qinvokable]
@@ -109,22 +102,31 @@ mod ffi {
         fn close_transient_surfaces(self: Pin<&mut ShellState>);
 
         #[qinvokable]
-        fn set_transparency_preference(self: Pin<&mut ShellState>, enabled: bool);
+        fn update_launcher_query(self: Pin<&mut ShellState>, value: String);
 
         #[qinvokable]
-        fn set_bar_dense_preference(self: Pin<&mut ShellState>, enabled: bool);
+        fn activate_dock_item(self: Pin<&mut ShellState>, app_id: String);
 
         #[qinvokable]
-        fn set_terminal_command_value(self: Pin<&mut ShellState>, value: String);
+        fn launch_app(self: Pin<&mut ShellState>, app_id: String);
 
         #[qinvokable]
-        fn set_wallpaper_path_value(self: Pin<&mut ShellState>, value: String);
+        fn toggle_dock_pin(self: Pin<&mut ShellState>, app_id: String);
 
         #[qinvokable]
-        fn set_accent_color_value(self: Pin<&mut ShellState>, value: String);
+        fn activate_workspace(self: Pin<&mut ShellState>, target: String);
 
         #[qinvokable]
-        fn set_theme_name_value(self: Pin<&mut ShellState>, value: String);
+        fn focus_window(self: Pin<&mut ShellState>, window_id: String);
+
+        #[qinvokable]
+        fn dismiss_notification(self: Pin<&mut ShellState>, notification_id: String);
+
+        #[qinvokable]
+        fn request_volume_percent(self: Pin<&mut ShellState>, value: i32);
+
+        #[qinvokable]
+        fn request_brightness_percent(self: Pin<&mut ShellState>, value: i32);
     }
 }
 
@@ -134,6 +136,7 @@ pub struct ShellStateRust {
     active_workspace: String,
     active_window_title: String,
     active_window_class: String,
+    active_app_id: String,
     media_title: String,
     media_artist: String,
     media_playing: bool,
@@ -142,12 +145,11 @@ pub struct ShellStateRust {
     battery_percent: i32,
     battery_charging: bool,
     notification_count: i32,
-    latest_notification_title: String,
-    latest_notification_body: String,
     volume_percent: i32,
     brightness_percent: i32,
     has_hyprland: bool,
     has_playerctl: bool,
+    has_wpctl: bool,
     has_brightnessctl: bool,
     has_nmcli: bool,
     has_upower: bool,
@@ -155,29 +157,30 @@ pub struct ShellStateRust {
     overview_open: bool,
     notifications_open: bool,
     quick_settings_open: bool,
-    wallpaper_selector_open: bool,
-    session_open: bool,
-    settings_open: bool,
-    transparency_enabled: bool,
-    bar_dense: bool,
     accent_color: String,
-    accent_color_secondary: String,
-    accent_color_tertiary: String,
-    theme_name: String,
+    style_preset: String,
     wallpaper_path: String,
     terminal_command: String,
     config_path: String,
     state_path: String,
-    panel_height: i32,
     status_line: String,
+    app_catalog_json: String,
+    dock_items_json: String,
+    window_items_json: String,
+    mission_control_json: String,
+    notification_items_json: String,
+    search_results_json: String,
+    launcher_query: String,
+    dock_magnification: i32,
     config: ShellConfig,
     ui_state: ShellUiState,
+    runtime_snapshot: ShellSnapshot,
 }
 
 impl Default for ShellStateRust {
     fn default() -> Self {
         let config = load_or_create_config().unwrap_or_else(|_| ShellConfig::default());
-        let snapshot = shell_hyprland::bootstrap_snapshot();
+        let snapshot = shell_hyprland::bootstrap_snapshot(&config);
         Self::from_runtime(config, snapshot)
     }
 }
@@ -185,6 +188,17 @@ impl Default for ShellStateRust {
 impl ShellStateRust {
     fn from_runtime(config: ShellConfig, snapshot: ShellSnapshot) -> Self {
         let workspace_labels = to_qstring_list(snapshot.workspace_labels());
+        let app_catalog_json = to_json(snapshot.app_catalog());
+        let dock_items_json = to_json(snapshot.dock_items());
+        let window_items_json = to_json(snapshot.windows());
+        let mission_control_json = to_json(snapshot.mission_control_workspaces());
+        let notification_items_json = to_json(snapshot.notification_history());
+        let launcher_query = String::new();
+        let search_results_json = to_json(&search_app_entries(
+            snapshot.app_catalog(),
+            &launcher_query,
+            config.launcher.max_results,
+        ));
 
         Self {
             workspace_labels,
@@ -192,6 +206,7 @@ impl ShellStateRust {
             active_workspace: snapshot.active_workspace_name().to_owned(),
             active_window_title: snapshot.active_window().title().to_owned(),
             active_window_class: snapshot.active_window().class_name().to_owned(),
+            active_app_id: snapshot.active_app_id().unwrap_or_default().to_owned(),
             media_title: snapshot.media().title().to_owned(),
             media_artist: snapshot.media().artist().to_owned(),
             media_playing: snapshot.media().status() == shell_core::PlaybackStatus::Playing,
@@ -200,12 +215,11 @@ impl ShellStateRust {
             battery_percent: snapshot.battery().percent(),
             battery_charging: snapshot.battery().is_charging(),
             notification_count: snapshot.notifications().unread_count(),
-            latest_notification_title: snapshot.notifications().latest_title().to_owned(),
-            latest_notification_body: snapshot.notifications().latest_body().to_owned(),
             volume_percent: snapshot.quick_settings().volume_percent(),
             brightness_percent: snapshot.quick_settings().brightness_percent(),
             has_hyprland: snapshot.capabilities().has_hyprland,
             has_playerctl: snapshot.capabilities().has_playerctl,
+            has_wpctl: snapshot.capabilities().has_wpctl,
             has_brightnessctl: snapshot.capabilities().has_brightnessctl,
             has_nmcli: snapshot.capabilities().has_nmcli,
             has_upower: snapshot.capabilities().has_upower,
@@ -213,30 +227,32 @@ impl ShellStateRust {
             overview_open: false,
             notifications_open: false,
             quick_settings_open: false,
-            wallpaper_selector_open: false,
-            session_open: false,
-            settings_open: false,
-            transparency_enabled: config.appearance.enable_transparency,
-            bar_dense: config.bar.dense,
             accent_color: config.appearance.accent_color.clone(),
-            accent_color_secondary: config.appearance.accent_color_secondary.clone(),
-            accent_color_tertiary: config.appearance.accent_color_tertiary.clone(),
-            theme_name: config.appearance.theme_name.clone(),
+            style_preset: config.appearance.style_preset.clone(),
             wallpaper_path: config.background.wallpaper_path.clone(),
             terminal_command: config.integrations.terminal.clone(),
             config_path: config_file_path().display().to_string(),
             state_path: state_dir().display().to_string(),
-            panel_height: config.bar.panel_height,
             status_line: build_status_line(&snapshot),
+            app_catalog_json,
+            dock_items_json,
+            window_items_json,
+            mission_control_json,
+            notification_items_json,
+            search_results_json,
+            launcher_query,
+            dock_magnification: config.dock.magnification,
             config,
             ui_state: ShellUiState::default(),
+            runtime_snapshot: snapshot,
         }
     }
 }
 
 impl ffi::ShellState {
     fn refresh_shell(mut self: core::pin::Pin<&mut Self>) {
-        match shell_hyprland::load_snapshot() {
+        let config = self.as_ref().rust().config.clone();
+        match shell_hyprland::load_snapshot(&config) {
             Ok(snapshot) => self.as_mut().apply_snapshot(&snapshot),
             Err(error) => {
                 self.as_mut()
@@ -273,21 +289,6 @@ impl ffi::ShellState {
         self.as_mut().apply_action(ShellAction::QuickSettingsToggle);
     }
 
-    fn toggle_wallpaper_selector(mut self: core::pin::Pin<&mut Self>) {
-        self.as_mut().apply_action(ShellAction::WallpaperToggle);
-    }
-
-    fn toggle_session(mut self: core::pin::Pin<&mut Self>) {
-        self.as_mut().apply_action(ShellAction::SessionToggle);
-    }
-
-    fn toggle_settings(mut self: core::pin::Pin<&mut Self>) {
-        let rust = self.as_mut().rust_mut().get_mut();
-        rust.settings_open = !rust.settings_open;
-        let settings_open = rust.settings_open;
-        self.as_mut().set_settings_open(settings_open);
-    }
-
     fn request_lock(mut self: core::pin::Pin<&mut Self>) {
         let status = Command::new("loginctl").arg("lock-session").status();
         match status {
@@ -316,57 +317,144 @@ impl ffi::ShellState {
         {
             let rust = self.as_mut().rust_mut().get_mut();
             rust.ui_state = ShellUiState::default();
-            rust.settings_open = false;
+            rust.launcher_query.clear();
         }
         self.as_mut().sync_ui_state();
-        self.as_mut().set_settings_open(false);
+        self.as_mut().set_launcher_query(String::new());
+        self.as_mut().refresh_search_results();
     }
 
-    fn set_transparency_preference(mut self: core::pin::Pin<&mut Self>, enabled: bool) {
-        let rust = self.as_mut().rust_mut().get_mut();
-        rust.config.appearance.enable_transparency = enabled;
-        self.as_mut().set_transparency_enabled(enabled);
-        self.as_mut().persist_current_config();
+    fn update_launcher_query(mut self: core::pin::Pin<&mut Self>, value: String) {
+        self.as_mut().rust_mut().get_mut().launcher_query = value.clone();
+        self.as_mut().set_launcher_query(value);
+        self.as_mut().refresh_search_results();
     }
 
-    fn set_bar_dense_preference(mut self: core::pin::Pin<&mut Self>, enabled: bool) {
-        let rust = self.as_mut().rust_mut().get_mut();
-        rust.config.bar.dense = enabled;
-        self.as_mut().set_bar_dense(enabled);
-        self.as_mut().persist_current_config();
+    fn activate_dock_item(mut self: core::pin::Pin<&mut Self>, app_id: String) {
+        let target_window = self
+            .as_ref()
+            .rust()
+            .runtime_snapshot
+            .windows()
+            .iter()
+            .find(|window| window.app_id() == app_id)
+            .map(|window| window.window_id().to_owned());
+
+        match target_window {
+            Some(window_id) => self.as_mut().focus_window(window_id),
+            None => self.as_mut().launch_app(app_id),
+        }
     }
 
-    fn set_terminal_command_value(mut self: core::pin::Pin<&mut Self>, value: String) {
-        let rust = self.as_mut().rust_mut().get_mut();
-        rust.config.integrations.terminal = value.clone();
-        self.as_mut().set_terminal_command(value);
-        self.as_mut().persist_current_config();
+    fn launch_app(mut self: core::pin::Pin<&mut Self>, app_id: String) {
+        match shell_hyprland::launch_app(&app_id) {
+            Ok(()) => {
+                self.as_mut()
+                    .set_status_line(format!("Launch request sent for '{app_id}'."));
+                self.as_mut().close_transient_surfaces();
+            }
+            Err(error) => self.as_mut().set_status_line(error),
+        }
     }
 
-    fn set_wallpaper_path_value(mut self: core::pin::Pin<&mut Self>, value: String) {
-        let rust = self.as_mut().rust_mut().get_mut();
-        rust.config.background.wallpaper_path = value.clone();
-        self.as_mut().set_wallpaper_path(value);
+    fn toggle_dock_pin(mut self: core::pin::Pin<&mut Self>, app_id: String) {
+        {
+            let rust = self.as_mut().rust_mut().get_mut();
+            let pins = &mut rust.config.dock.pinned_apps;
+            if let Some(index) = pins.iter().position(|candidate| candidate == &app_id) {
+                pins.remove(index);
+            } else {
+                pins.push(app_id.clone());
+            }
+        }
+
         self.as_mut().persist_current_config();
+        self.as_mut().refresh_shell();
+        self.as_mut()
+            .set_status_line(format!("Dock pin state updated for '{app_id}'."));
     }
 
-    fn set_accent_color_value(mut self: core::pin::Pin<&mut Self>, value: String) {
-        let rust = self.as_mut().rust_mut().get_mut();
-        rust.config.appearance.accent_color = value.clone();
-        self.as_mut().set_accent_color(value);
-        self.as_mut().persist_current_config();
+    fn activate_workspace(mut self: core::pin::Pin<&mut Self>, target: String) {
+        match shell_hyprland::activate_workspace(&target) {
+            Ok(()) => {
+                self.as_mut()
+                    .set_status_line(format!("Workspace activation sent for '{target}'."));
+                self.as_mut().close_transient_surfaces();
+            }
+            Err(error) => self.as_mut().set_status_line(error),
+        }
     }
 
-    fn set_theme_name_value(mut self: core::pin::Pin<&mut Self>, value: String) {
-        let rust = self.as_mut().rust_mut().get_mut();
-        rust.config.appearance.theme_name = value.clone();
-        self.as_mut().set_theme_name(value);
-        self.as_mut().persist_current_config();
+    fn focus_window(mut self: core::pin::Pin<&mut Self>, window_id: String) {
+        match shell_hyprland::focus_window(&window_id) {
+            Ok(()) => {
+                self.as_mut()
+                    .set_status_line(format!("Focus request sent for '{window_id}'."));
+                self.as_mut().close_transient_surfaces();
+            }
+            Err(error) => self.as_mut().set_status_line(error),
+        }
+    }
+
+    fn dismiss_notification(mut self: core::pin::Pin<&mut Self>, notification_id: String) {
+        {
+            let rust = self.as_mut().rust_mut().get_mut();
+            for item in rust.runtime_snapshot.notification_history_mut().iter_mut() {
+                if item.notification_id() == notification_id {
+                    *item = NotificationItemSummary::new(
+                        item.notification_id().to_owned(),
+                        item.app_name().to_owned(),
+                        item.title().to_owned(),
+                        item.body().to_owned(),
+                        item.timestamp().to_owned(),
+                        item.urgency().to_owned(),
+                        true,
+                    );
+                }
+            }
+            rust.runtime_snapshot.refresh_notification_summary();
+        }
+
+        self.as_mut().refresh_serialized_models();
+        let unread_count = self
+            .as_ref()
+            .rust()
+            .runtime_snapshot
+            .notifications()
+            .unread_count();
+        self.as_mut().set_notification_count(unread_count);
+    }
+
+    fn request_volume_percent(mut self: core::pin::Pin<&mut Self>, value: i32) {
+        match shell_hyprland::set_volume_percent(value) {
+            Ok(()) => {
+                self.as_mut().set_volume_percent(value.clamp(0, 150));
+                self.as_mut()
+                    .set_status_line(format!("Volume target set to {}%.", value.clamp(0, 150)));
+            }
+            Err(error) => self.as_mut().set_status_line(error),
+        }
+    }
+
+    fn request_brightness_percent(mut self: core::pin::Pin<&mut Self>, value: i32) {
+        match shell_hyprland::set_brightness_percent(value) {
+            Ok(()) => {
+                self.as_mut().set_brightness_percent(value.clamp(1, 100));
+                self.as_mut()
+                    .set_status_line(format!("Brightness target set to {}%.", value.clamp(1, 100)));
+            }
+            Err(error) => self.as_mut().set_status_line(error),
+        }
     }
 }
 
 impl ffi::ShellState {
     fn apply_snapshot(mut self: core::pin::Pin<&mut Self>, snapshot: &ShellSnapshot) {
+        {
+            let rust = self.as_mut().rust_mut().get_mut();
+            rust.runtime_snapshot = snapshot.clone();
+        }
+
         self.as_mut()
             .set_workspace_labels(to_qstring_list(snapshot.workspace_labels()));
         self.as_mut()
@@ -377,6 +465,8 @@ impl ffi::ShellState {
             .set_active_window_title(snapshot.active_window().title().to_owned());
         self.as_mut()
             .set_active_window_class(snapshot.active_window().class_name().to_owned());
+        self.as_mut()
+            .set_active_app_id(snapshot.active_app_id().unwrap_or_default().to_owned());
         self.as_mut().set_media_title(snapshot.media().title().to_owned());
         self.as_mut()
             .set_media_artist(snapshot.media().artist().to_owned());
@@ -393,10 +483,6 @@ impl ffi::ShellState {
         self.as_mut()
             .set_notification_count(snapshot.notifications().unread_count());
         self.as_mut()
-            .set_latest_notification_title(snapshot.notifications().latest_title().to_owned());
-        self.as_mut()
-            .set_latest_notification_body(snapshot.notifications().latest_body().to_owned());
-        self.as_mut()
             .set_volume_percent(snapshot.quick_settings().volume_percent());
         self.as_mut()
             .set_brightness_percent(snapshot.quick_settings().brightness_percent());
@@ -404,11 +490,13 @@ impl ffi::ShellState {
             .set_has_hyprland(snapshot.capabilities().has_hyprland);
         self.as_mut()
             .set_has_playerctl(snapshot.capabilities().has_playerctl);
+        self.as_mut().set_has_wpctl(snapshot.capabilities().has_wpctl);
         self.as_mut()
             .set_has_brightnessctl(snapshot.capabilities().has_brightnessctl);
         self.as_mut().set_has_nmcli(snapshot.capabilities().has_nmcli);
         self.as_mut().set_has_upower(snapshot.capabilities().has_upower);
         self.as_mut().set_status_line(build_status_line(snapshot));
+        self.as_mut().refresh_serialized_models();
     }
 
     fn apply_action(mut self: core::pin::Pin<&mut Self>, action: ShellAction) {
@@ -432,22 +520,13 @@ impl ffi::ShellState {
 
     fn sync_ui_state(mut self: core::pin::Pin<&mut Self>) {
         let state = self.as_ref();
-        let (
-            launcher_open,
-            overview_open,
-            notifications_open,
-            quick_settings_open,
-            wallpaper_selector_open,
-            session_open,
-        ) = {
+        let (launcher_open, overview_open, notifications_open, quick_settings_open) = {
             let rust = state.rust();
             (
                 rust.ui_state.launcher_open,
                 rust.ui_state.overview_open,
                 rust.ui_state.notifications_open,
                 rust.ui_state.quick_settings_open,
-                rust.ui_state.wallpaper_selector_open,
-                rust.ui_state.session_open,
             )
         };
 
@@ -455,9 +534,6 @@ impl ffi::ShellState {
         self.as_mut().set_overview_open(overview_open);
         self.as_mut().set_notifications_open(notifications_open);
         self.as_mut().set_quick_settings_open(quick_settings_open);
-        self.as_mut()
-            .set_wallpaper_selector_open(wallpaper_selector_open);
-        self.as_mut().set_session_open(session_open);
     }
 
     fn persist_current_config(mut self: core::pin::Pin<&mut Self>) {
@@ -466,6 +542,44 @@ impl ffi::ShellState {
             self.as_mut()
                 .set_status_line(format!("Config save failed: {error}"));
         }
+    }
+
+    fn refresh_serialized_models(mut self: core::pin::Pin<&mut Self>) {
+        let (app_catalog_json, dock_items_json, window_items_json, mission_control_json, notification_items_json) = {
+            let snapshot = self.as_ref().rust().runtime_snapshot.clone();
+            (
+                to_json(snapshot.app_catalog()),
+                to_json(snapshot.dock_items()),
+                to_json(snapshot.windows()),
+                to_json(snapshot.mission_control_workspaces()),
+                to_json(snapshot.notification_history()),
+            )
+        };
+
+        self.as_mut().set_app_catalog_json(app_catalog_json);
+        self.as_mut().set_dock_items_json(dock_items_json);
+        self.as_mut().set_window_items_json(window_items_json);
+        self.as_mut().set_mission_control_json(mission_control_json);
+        self.as_mut()
+            .set_notification_items_json(notification_items_json);
+        self.as_mut().refresh_search_results();
+    }
+
+    fn refresh_search_results(mut self: core::pin::Pin<&mut Self>) {
+        let search_results_json = {
+            let query = self.as_ref().rust().launcher_query.clone();
+            let max_results = self.as_ref().rust().config.launcher.max_results;
+            let apps = self
+                .as_ref()
+                .rust()
+                .runtime_snapshot
+                .app_catalog()
+                .to_vec();
+            let results = search_app_entries(&apps, &query, max_results);
+            to_json(&results)
+        };
+
+        self.as_mut().set_search_results_json(search_results_json);
     }
 }
 
@@ -484,14 +598,23 @@ fn to_qstring_list(strings: Vec<String>) -> QStringList {
     QStringList::from(&list)
 }
 
+fn to_json<T: serde::Serialize + ?Sized>(value: &T) -> String {
+    serde_json::to_string(value).unwrap_or_else(|_| String::from("[]"))
+}
+
 fn build_status_line(snapshot: &ShellSnapshot) -> String {
     if snapshot.capabilities().has_hyprland {
         format!(
-            "Linked to {} with {} workspaces live.",
+            "Linked to {} with {} workspaces, {} windows, and {} apps indexed.",
             snapshot.compositor_name(),
-            snapshot.workspaces().len()
+            snapshot.workspaces().len(),
+            snapshot.windows().len(),
+            snapshot.app_catalog().len()
         )
     } else {
-        String::from("Running in preview mode. Launch inside Hyprland for live compositor data.")
+        format!(
+            "Running in preview mode with {} apps indexed for the new shell UI.",
+            snapshot.app_catalog().len()
+        )
     }
 }

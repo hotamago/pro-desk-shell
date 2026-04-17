@@ -27,6 +27,39 @@ pub fn xdg_state_home() -> PathBuf {
         })
 }
 
+pub fn xdg_data_home() -> PathBuf {
+    env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            env::var_os("HOME")
+                .map(PathBuf::from)
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".local/share")
+        })
+}
+
+pub fn xdg_data_dirs() -> Vec<PathBuf> {
+    let configured = env::var_os("XDG_DATA_DIRS")
+        .map(|value| env::split_paths(&value).collect::<Vec<_>>())
+        .unwrap_or_else(|| vec![PathBuf::from("/usr/local/share"), PathBuf::from("/usr/share")]);
+
+    configured
+        .into_iter()
+        .filter(|path| !path.as_os_str().is_empty())
+        .collect()
+}
+
+pub fn desktop_applications_dirs() -> Vec<PathBuf> {
+    let mut directories = vec![xdg_data_home().join("applications")];
+    directories.extend(
+        xdg_data_dirs()
+            .into_iter()
+            .map(|path| path.join("applications")),
+    );
+
+    directories
+}
+
 pub fn config_dir() -> PathBuf {
     xdg_config_home().join(SHELL_DIRECTORY_NAME)
 }

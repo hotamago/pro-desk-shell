@@ -1,4 +1,6 @@
+use std::collections::BTreeMap;
 use std::env;
+use std::fs;
 use std::io::{Read, Write};
 use std::net::Shutdown;
 use std::os::unix::net::UnixStream;
@@ -8,16 +10,25 @@ use std::process::Command;
 use serde::Deserialize;
 use shell_core::{
     ActiveWindowSummary,
+    AppEntrySummary,
     BatterySummary,
+    NotificationItemSummary,
     MediaSummary,
     NetworkSummary,
-    NotificationSummary,
     PlaybackStatus,
     QuickSettingsSummary,
     ShellCapabilities,
+    ShellConfig,
     ShellSnapshot,
+    WindowSummary,
     WorkspaceSummary,
+    build_notification_summary,
+    derive_dock_items,
+    desktop_applications_dirs,
+    group_windows_by_workspace,
+    match_window_class_to_app_id,
     parse_brightnessctl_machine_output,
+    parse_desktop_entry,
     parse_nmcli_active_wifi,
     parse_playerctl_metadata_output,
     parse_upower_output,
@@ -59,21 +70,23 @@ pub fn detect_sockets() -> Option<HyprlandSockets> {
     })
 }
 
-pub fn bootstrap_snapshot() -> ShellSnapshot {
-    load_snapshot().unwrap_or_else(|_| ShellSnapshot::placeholder())
+pub fn bootstrap_snapshot(config: &ShellConfig) -> ShellSnapshot {
+    load_snapshot(config).unwrap_or_else(|_| ShellSnapshot::placeholder())
 }
 
-pub fn load_snapshot() -> Result<ShellSnapshot, String> {
+pub fn load_snapshot(config: &ShellConfig) -> Result<ShellSnapshot, String> {
     let capabilities = ShellCapabilities::detect();
+    let app_catalog = load_app_catalog();
     let system_state = system_state_snapshot(&capabilities);
     let Some(sockets) = detect_sockets() else {
-        return Ok(fallback_snapshot(capabilities, system_state));
+        return Ok(fallback_snapshot(config, capabilities, system_state, app_catalog));
     };
 
     let client = HyprlandClient::new(sockets);
     let raw_workspaces = client.command("j/workspaces")?;
     let raw_monitors = client.command("j/monitors")?;
     let raw_active_window = client.command("j/activewindow")?;
+    let raw_clients = client.command("j/clients")?;
 
     let workspaces = serde_json::from_str::<Vec<HyprWorkspace>>(&raw_workspaces)
         .map_err(|error| format!("Could not parse Hyprland workspaces JSON: {error}"))?;
@@ -81,6 +94,8 @@ pub fn load_snapshot() -> Result<ShellSnapshot, String> {
         .map_err(|error| format!("Could not parse Hyprland monitors JSON: {error}"))?;
     let active_window = serde_json::from_str::<HyprActiveWindow>(&raw_active_window)
         .map_err(|error| format!("Could not parse Hyprland active window JSON: {error}"))?;
+    let clients = serde_json::from_str::<Vec<HyprClient>>(&raw_clients)
+        .map_err(|error| format!("Could not parse Hyprland clients JSON: {error}"))?;
 
     let active_workspace = monitors
         .iter()
@@ -88,9 +103,14 @@ pub fn load_snapshot() -> Result<ShellSnapshot, String> {
         .map(|monitor| monitor.active_workspace.name.clone())
         .or_else(|| monitors.first().map(|monitor| monitor.active_workspace.name.clone()));
 
+    let window_summaries = build_window_summaries(&clients, &active_window, &app_catalog);
     let workspace_summaries = workspaces
         .into_iter()
         .map(|workspace| {
+            let computed_window_count = window_summaries
+                .iter()
+                .filter(|window| window.workspace_id() == workspace.id)
+                .count();
             WorkspaceSummary::with_state(
                 workspace.id,
                 workspace.name.clone(),
@@ -98,14 +118,18 @@ pub fn load_snapshot() -> Result<ShellSnapshot, String> {
                     .as_deref()
                     .map(|active| active == workspace.name)
                     .unwrap_or(false),
-                workspace.windows.max(0) as usize,
+                computed_window_count.max(workspace.windows.max(0) as usize),
             )
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    let active_app_id = match_window_class_to_app_id(&active_window.class_name, &app_catalog);
+    let dock_items = derive_dock_items(&config.dock.pinned_apps, &app_catalog, &window_summaries);
+    let notification_history = system_state.notification_history.clone();
 
     Ok(ShellSnapshot::new(
         Some(String::from("Hyprland")),
-        workspace_summaries,
+        workspace_summaries.clone(),
         active_workspace,
         ActiveWindowSummary::with_state(
             empty_fallback(&active_window.title, "Desktop"),
@@ -113,13 +137,84 @@ pub fn load_snapshot() -> Result<ShellSnapshot, String> {
             active_window.floating,
             active_window.fullscreen != 0,
         ),
+        active_app_id,
+        app_catalog.clone(),
+        dock_items,
+        window_summaries.clone(),
+        group_windows_by_workspace(&workspace_summaries, &window_summaries),
         system_state.media,
         system_state.battery,
         system_state.network,
-        system_state.notifications,
+        build_notification_summary(&notification_history),
+        notification_history,
         system_state.quick_settings,
         capabilities,
     ))
+}
+
+pub fn launch_app(app_id: &str) -> Result<(), String> {
+    let app_catalog = load_app_catalog();
+    let app = app_catalog
+        .iter()
+        .find(|candidate| candidate.app_id() == app_id)
+        .ok_or_else(|| format!("Could not find app '{app_id}' in the catalog."))?;
+
+    Command::new("sh")
+        .arg("-lc")
+        .arg(app.exec_command())
+        .spawn()
+        .map(|_| ())
+        .map_err(|error| format!("Could not launch '{}': {error}", app.display_name()))
+}
+
+pub fn activate_workspace(target: &str) -> Result<(), String> {
+    if target.trim().is_empty() {
+        return Err(String::from("Workspace target cannot be empty."));
+    }
+
+    if target.parse::<i32>().is_ok() {
+        dispatch(&format!("workspace {target}"))
+    } else {
+        dispatch(&format!("workspace name:{target}"))
+    }
+}
+
+pub fn focus_window(window_id: &str) -> Result<(), String> {
+    if window_id.trim().is_empty() {
+        return Err(String::from("Window target cannot be empty."));
+    }
+
+    dispatch(&format!("focuswindow address:{window_id}"))
+}
+
+pub fn set_volume_percent(value: i32) -> Result<(), String> {
+    let clamped = value.clamp(0, 150);
+    Command::new("wpctl")
+        .args(["set-volume", "@DEFAULT_AUDIO_SINK@", &format!("{clamped}%")])
+        .status()
+        .map_err(|error| format!("Could not invoke wpctl: {error}"))
+        .and_then(|status| {
+            if status.success() {
+                Ok(())
+            } else {
+                Err(format!("wpctl exited with status {:?}.", status.code()))
+            }
+        })
+}
+
+pub fn set_brightness_percent(value: i32) -> Result<(), String> {
+    let clamped = value.clamp(1, 100);
+    Command::new("brightnessctl")
+        .args(["set", &format!("{clamped}%")])
+        .status()
+        .map_err(|error| format!("Could not invoke brightnessctl: {error}"))
+        .and_then(|status| {
+            if status.success() {
+                Ok(())
+            } else {
+                Err(format!("brightnessctl exited with status {:?}.", status.code()))
+            }
+        })
 }
 
 pub fn parse_event_line(line: &str) -> HyprlandEvent {
@@ -187,29 +282,68 @@ impl HyprlandClient {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SystemStateSnapshot {
     media: MediaSummary,
     battery: BatterySummary,
     network: NetworkSummary,
-    notifications: NotificationSummary,
+    notification_history: Vec<NotificationItemSummary>,
     quick_settings: QuickSettingsSummary,
 }
 
-fn fallback_snapshot(capabilities: ShellCapabilities, system_state: SystemStateSnapshot) -> ShellSnapshot {
+fn fallback_snapshot(
+    config: &ShellConfig,
+    capabilities: ShellCapabilities,
+    system_state: SystemStateSnapshot,
+    app_catalog: Vec<AppEntrySummary>,
+) -> ShellSnapshot {
+    let workspaces = vec![
+        WorkspaceSummary::with_state(1, "Desktop", true, 2),
+        WorkspaceSummary::with_state(2, "Studio", false, 2),
+        WorkspaceSummary::with_state(3, "Comms", false, 1),
+    ];
+    let windows = vec![
+        WindowSummary::new(
+            "preview-firefox",
+            "Shell preview",
+            "firefox",
+            "firefox",
+            1,
+            "Desktop",
+            true,
+            false,
+            false,
+        ),
+        WindowSummary::new(
+            "preview-kitty",
+            "dev shell",
+            "kitty",
+            "kitty",
+            2,
+            "Studio",
+            false,
+            false,
+            false,
+        ),
+    ];
+    let dock_items = derive_dock_items(&config.dock.pinned_apps, &app_catalog, &windows);
+    let notification_history = system_state.notification_history.clone();
+
     ShellSnapshot::new(
         Some(String::from("Hyprland")),
-        vec![
-            WorkspaceSummary::with_state(1, "1:web", true, 2),
-            WorkspaceSummary::with_state(2, "2:code", false, 4),
-            WorkspaceSummary::with_state(3, "3:chat", false, 1),
-        ],
-        Some(String::from("1:web")),
+        workspaces.clone(),
+        Some(String::from("Desktop")),
         ActiveWindowSummary::with_state("Shell preview", "pro-desk-shell", false, false),
+        Some(String::from("firefox")),
+        app_catalog,
+        dock_items,
+        windows.clone(),
+        group_windows_by_workspace(&workspaces, &windows),
         system_state.media,
         system_state.battery,
         system_state.network,
-        system_state.notifications,
+        build_notification_summary(&notification_history),
+        notification_history,
         system_state.quick_settings,
         capabilities,
     )
@@ -269,16 +403,37 @@ fn system_state_snapshot(capabilities: &ShellCapabilities) -> SystemStateSnapsho
         BatterySummary::new(100, false)
     };
 
-    let notification_title = if capabilities.has_hyprland {
-        "Hyprland link live"
-    } else {
-        "Hyprland not detected"
-    };
-    let notification_body = if capabilities.has_hyprland {
-        "Top bar and overlays are reading compositor state from the Rust adapter."
-    } else {
-        "Run inside Hyprland to replace scaffold data with live workspace state."
-    };
+    let notification_history = vec![
+        NotificationItemSummary::new(
+            "runtime-status",
+            "Shell",
+            if capabilities.has_hyprland {
+                "Hyprland link live"
+            } else {
+                "Hyprland not detected"
+            },
+            if capabilities.has_hyprland {
+                "Menu bar, dock, Spotlight, and Mission Control are reading compositor state."
+            } else {
+                "Run inside Hyprland to replace preview windows with live workspace state."
+            },
+            "Now",
+            "normal",
+            false,
+        ),
+        NotificationItemSummary::new(
+            "runtime-system",
+            "System",
+            "Control Center ready",
+            format!(
+                "Audio {}, brightness {}, network {}.",
+                volume_percent, brightness_percent, network_name
+            ),
+            "Just now",
+            "low",
+            false,
+        ),
+    ];
 
     let network_state = if network_name == "Offline" {
         "Disconnected"
@@ -290,9 +445,81 @@ fn system_state_snapshot(capabilities: &ShellCapabilities) -> SystemStateSnapsho
         media,
         battery,
         network: NetworkSummary::new(network_name, network_state),
-        notifications: NotificationSummary::new(1, notification_title, notification_body),
+        notification_history,
         quick_settings: QuickSettingsSummary::new(volume_percent, brightness_percent),
     }
+}
+
+fn build_window_summaries(
+    clients: &[HyprClient],
+    active_window: &HyprActiveWindow,
+    app_catalog: &[AppEntrySummary],
+) -> Vec<WindowSummary> {
+    clients
+        .iter()
+        .filter(|client| client.mapped)
+        .map(|client| {
+            let app_id = match_window_class_to_app_id(&client.class_name, app_catalog)
+                .unwrap_or_else(|| empty_fallback(&client.class_name, "unknown"));
+            let focused = (!active_window.address.is_empty() && client.address == active_window.address)
+                || (
+                    client.class_name == active_window.class_name
+                        && client.title == active_window.title
+                        && !client.title.is_empty()
+                );
+
+            WindowSummary::new(
+                client.address.clone(),
+                empty_fallback(&client.title, "Window"),
+                empty_fallback(&client.class_name, "unknown"),
+                app_id,
+                client.workspace.id,
+                empty_fallback(&client.workspace.name, "Workspace"),
+                focused,
+                client.floating,
+                client.fullscreen != 0,
+            )
+        })
+        .collect()
+}
+
+fn load_app_catalog() -> Vec<AppEntrySummary> {
+    let mut catalog = BTreeMap::<String, AppEntrySummary>::new();
+
+    for directory in desktop_applications_dirs() {
+        let Ok(entries) = fs::read_dir(&directory) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let is_desktop_entry = path
+                .extension()
+                .and_then(|extension| extension.to_str())
+                .map(|extension| extension == "desktop")
+                .unwrap_or(false);
+            if !is_desktop_entry {
+                continue;
+            }
+
+            let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+                continue;
+            };
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
+
+            if let Some(app) = parse_desktop_entry(stem, &content) {
+                catalog.entry(app.app_id().to_owned()).or_insert(app);
+            }
+        }
+    }
+
+    if catalog.is_empty() {
+        return ShellSnapshot::placeholder().app_catalog().to_vec();
+    }
+
+    catalog.into_values().collect()
 }
 
 fn primary_battery_path() -> Option<String> {
@@ -302,6 +529,12 @@ fn primary_battery_path() -> Option<String> {
         .map(str::trim)
         .find(|line| line.contains("battery"))
         .map(ToOwned::to_owned)
+}
+
+fn dispatch(command: &str) -> Result<(), String> {
+    let sockets = detect_sockets().ok_or_else(|| String::from("Hyprland sockets are unavailable."))?;
+    let client = HyprlandClient::new(sockets);
+    client.command(&format!("dispatch {command}")).map(|_| ())
 }
 
 fn command_output(command: &str, arguments: &[&str]) -> Option<String> {
@@ -348,6 +581,8 @@ struct HyprMonitor {
 
 #[derive(Debug, Deserialize)]
 struct HyprActiveWindow {
+    #[serde(default)]
+    address: String,
     #[serde(default, rename = "class")]
     class_name: String,
     #[serde(default)]
@@ -356,6 +591,32 @@ struct HyprActiveWindow {
     floating: bool,
     #[serde(default)]
     fullscreen: i32,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct HyprClientWorkspace {
+    #[serde(default)]
+    id: i32,
+    #[serde(default)]
+    name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct HyprClient {
+    #[serde(default)]
+    address: String,
+    #[serde(default, rename = "class")]
+    class_name: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    floating: bool,
+    #[serde(default)]
+    fullscreen: i32,
+    #[serde(default)]
+    mapped: bool,
+    #[serde(default)]
+    workspace: HyprClientWorkspace,
 }
 
 #[cfg(test)]

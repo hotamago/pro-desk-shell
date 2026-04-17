@@ -9,8 +9,11 @@ use crate::paths::{config_dir, config_file_path};
 pub struct ShellConfig {
     pub appearance: AppearanceConfig,
     pub bar: BarConfig,
+    pub dock: DockConfig,
     pub background: BackgroundConfig,
     pub integrations: IntegrationCommands,
+    pub launcher: LauncherConfig,
+    pub menu_bar: MenuBarConfig,
     pub shell: ShellConfigSection,
 }
 
@@ -19,8 +22,11 @@ impl Default for ShellConfig {
         Self {
             appearance: AppearanceConfig::default(),
             bar: BarConfig::default(),
+            dock: DockConfig::default(),
             background: BackgroundConfig::default(),
             integrations: IntegrationCommands::default(),
+            launcher: LauncherConfig::default(),
+            menu_bar: MenuBarConfig::default(),
             shell: ShellConfigSection::default(),
         }
     }
@@ -33,6 +39,7 @@ pub struct AppearanceConfig {
     pub accent_color_secondary: String,
     pub accent_color_tertiary: String,
     pub enable_transparency: bool,
+    pub style_preset: String,
     pub theme_name: String,
 }
 
@@ -43,7 +50,8 @@ impl Default for AppearanceConfig {
             accent_color_secondary: String::from("#ffb36b"),
             accent_color_tertiary: String::from("#7fffb4"),
             enable_transparency: true,
-            theme_name: String::from("ii-horizon"),
+            style_preset: String::from("macos"),
+            theme_name: String::from("macos-sunrise"),
         }
     }
 }
@@ -66,6 +74,31 @@ impl Default for BarConfig {
             show_system_summary: true,
             show_workspace_numbers: true,
             panel_height: 88,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct DockConfig {
+    pub pinned_apps: Vec<String>,
+    pub auto_hide: bool,
+    pub magnification: i32,
+    pub show_running_indicators: bool,
+}
+
+impl Default for DockConfig {
+    fn default() -> Self {
+        Self {
+            pinned_apps: vec![
+                String::from("org.gnome.Nautilus"),
+                String::from("firefox"),
+                String::from("kitty"),
+                String::from("code"),
+            ],
+            auto_hide: false,
+            magnification: 18,
+            show_running_indicators: true,
         }
     }
 }
@@ -106,6 +139,32 @@ impl Default for IntegrationCommands {
             file_manager: String::from("xdg-open ."),
             network_settings: String::from("nm-connection-editor"),
             volume_mixer: String::from("pavucontrol"),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct LauncherConfig {
+    pub max_results: usize,
+}
+
+impl Default for LauncherConfig {
+    fn default() -> Self {
+        Self { max_results: 8 }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(default)]
+pub struct MenuBarConfig {
+    pub compact_mode: bool,
+}
+
+impl Default for MenuBarConfig {
+    fn default() -> Self {
+        Self {
+            compact_mode: false,
         }
     }
 }

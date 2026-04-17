@@ -12,7 +12,6 @@ namespace {
 
 constexpr auto kAppModule = "ProDeskShell";
 constexpr auto kAppType = "App";
-constexpr int kPanelHeight = 88;
 
 bool use_layer_shell_from_environment()
 {
@@ -93,12 +92,12 @@ bool AppBootstrap::configure_layer_shell(QQuickWindow* window)
     layer_window->setLayer(LayerShellQt::Window::LayerTop);
     LayerShellQt::Window::Anchors anchors;
     anchors |= LayerShellQt::Window::AnchorTop;
+    anchors |= LayerShellQt::Window::AnchorBottom;
     anchors |= LayerShellQt::Window::AnchorLeft;
     anchors |= LayerShellQt::Window::AnchorRight;
 
     layer_window->setAnchors(anchors);
-    layer_window->setExclusiveZone(kPanelHeight);
-    window->setHeight(kPanelHeight);
+    layer_window->setExclusiveZone(0);
 
     return true;
 }
