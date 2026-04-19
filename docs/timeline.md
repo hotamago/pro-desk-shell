@@ -1,34 +1,34 @@
 # Shell Rewrite Timeline
 
-## Milestone 1: Foundation And Theme
+## Milestone 1: AGS Foundation And Theme
 
-- Deliver the new `qml/App.qml` shell root and macOS-inspired glass theme.
-- Acceptance: shell root renders in preview mode, overlay orchestration works, old QML tree is gone.
-- Dependencies: bridge must expose runtime snapshot basics and overlay state.
+- Deliver the new `ags/config.js` shell root, CSS theme, and Rust CLI bridge.
+- Acceptance: shell root renders through AGS, overlay orchestration works, and the old QML tree is gone.
+- Dependencies: CLI must expose runtime snapshot basics and shell action commands.
 
-## Milestone 2: Menu Bar And Dock
+## Milestone 2: Top Bar And Dock
 
-- Deliver top menu bar, bottom dock, active app state, pin/unpin behavior, and running indicators.
-- Acceptance: dock shows pinned plus running apps, clicks launch or focus apps, menu bar reflects active workspace/window.
-- Dependencies: app catalog indexing, dock derivation, focus and launch actions.
+- Deliver top bar, bottom dock, active app state, pin/unpin behavior, and running indicators.
+- Acceptance: dock shows pinned plus running apps, clicks launch or focus apps, top bar reflects active workspace/window.
+- Dependencies: app catalog indexing, dock derivation, focus and launch CLI actions.
 
-## Milestone 3: Spotlight And App Launch
+## Milestone 3: Launcher And App Launch
 
-- Deliver Spotlight search, result ranking, keyboard-first interaction, and real desktop-entry launch.
+- Deliver launcher search, result ranking, keyboard-first interaction, and real desktop-entry launch.
 - Acceptance: search returns real installed apps and Enter launches the top match.
-- Dependencies: desktop-entry parsing, search ranking helpers, bridge search result exposure.
+- Dependencies: desktop-entry parsing, search ranking helpers, CLI search exposure.
 
-## Milestone 4: Control Center And Notifications
+## Milestone 4: Control Panel And Notifications
 
 - Deliver the right-side control surface for media, volume, brightness, network, battery, and notification history.
-- Acceptance: sliders can request runtime updates and notification list is dismissible.
-- Dependencies: system adapters, bridge commands, notification list model.
+- Acceptance: controls can request runtime updates and notification list is visible from AGS.
+- Dependencies: system adapters, CLI commands, notification list model.
 
-## Milestone 5: Mission Control
+## Milestone 5: Overview
 
 - Deliver full-screen workspace overview with window cards and focus actions.
 - Acceptance: overview groups windows by workspace and clicking a card requests focus.
-- Dependencies: Hyprland client listing, workspace grouping, focus-window action.
+- Dependencies: Hyprland client listing, workspace grouping, focus-window CLI action.
 
 ## Milestone 6: Settings And Polish
 

@@ -31,6 +31,10 @@ DEFAULT_HYPRLAND_DIR = Path.home() / ".config/hypr/pro-desk-shell"
 DEFAULT_BIN_DIR = Path.home() / ".local/bin"
 HYPRLAND_ASSETS_DIR = ROOT_DIR / "tools/bootstrap/assets/hyprland"
 HYPRLAND_DISPATCH_SCRIPT = ROOT_DIR / "tools/bootstrap/assets/bin/pro-desk-shell-dispatch.sh"
+AGS_LAUNCHER_SCRIPT = ROOT_DIR / "tools/bootstrap/assets/bin/ags-launcher.mjs"
+INSTALLED_AGS_LAUNCHER_NAME = "pro-desk-shell-ags-launcher.mjs"
+AGS_DIR = ROOT_DIR / "ags"
+AGS_CONFIG_ENTRY = AGS_DIR / "config.js"
 
 
 def is_writable_path(path: Path) -> bool:
@@ -101,12 +105,17 @@ def run_command(
     *,
     cwd: Path = ROOT_DIR,
     dry_run: bool = False,
+    env: dict[str, str] | None = None,
 ) -> None:
     print(f"+ {shlex.join(command)}", flush=True)
     if dry_run:
         return
 
-    subprocess.run(command, cwd=cwd, check=True, env=subprocess_environment())
+    merged_env = subprocess_environment()
+    if env:
+        merged_env.update(env)
+
+    subprocess.run(command, cwd=cwd, check=True, env=merged_env)
 
 
 def copy_tree_contents(source_dir: Path, destination_dir: Path, *, dry_run: bool) -> None:
@@ -136,8 +145,11 @@ def install_hyprland_assets(
     copy_tree_contents(HYPRLAND_ASSETS_DIR, hyprland_dir, dry_run=dry_run)
 
     dispatch_destination = bin_dir / "pro-desk-shell-dispatch"
+    launcher_destination = bin_dir / INSTALLED_AGS_LAUNCHER_NAME
     print(f"+ cp {HYPRLAND_DISPATCH_SCRIPT} {dispatch_destination}")
     print(f"+ chmod 755 {dispatch_destination}")
+    print(f"+ cp {AGS_LAUNCHER_SCRIPT} {launcher_destination}")
+    print(f"+ chmod 755 {launcher_destination}")
 
     if dry_run:
         return
@@ -145,109 +157,122 @@ def install_hyprland_assets(
     bin_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(HYPRLAND_DISPATCH_SCRIPT, dispatch_destination)
     dispatch_destination.chmod(0o755)
+    shutil.copy2(AGS_LAUNCHER_SCRIPT, launcher_destination)
+    launcher_destination.chmod(0o755)
 
 
-def configure_project(
-    build_dir: Path,
-    install_prefix: Path,
-    build_type: str,
-    dry_run: bool,
-) -> None:
-    ensure_compatible_build_dir(build_dir, dry_run=dry_run)
+def cargo_target_dir(build_dir: Path) -> Path:
+    return build_dir / "cargo"
+
+
+def shell_cli_binary_path(build_dir: Path, build_type: str) -> Path:
+    profile_dir = "release" if build_type == "Release" else "debug"
+    binary_name = "shell_cli.exe" if os.name == "nt" else "shell_cli"
+    return cargo_target_dir(build_dir) / profile_dir / binary_name
+
+
+def ags_binary() -> str | None:
+    return shutil.which("ags")
+
+
+def gjs_binary() -> str | None:
+    return shutil.which("gjs")
+
+
+def pkg_config_has(package_name: str) -> bool:
+    pkg_config = shutil.which("pkg-config")
+    if pkg_config is None:
+        return False
+
+    result = subprocess.run(
+        [pkg_config, "--exists", package_name],
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+def build_project(build_dir: Path, build_type: str, dry_run: bool) -> None:
     command = [
-        "cmake",
-        "-S",
-        str(ROOT_DIR),
-        "-B",
-        str(build_dir),
-        f"-DCMAKE_BUILD_TYPE={build_type}",
-        f"-DCMAKE_INSTALL_PREFIX={install_prefix}",
+        "cargo",
+        "build",
+        "--manifest-path",
+        str(ROOT_DIR / "rust/Cargo.toml"),
+        "-p",
+        "shell_cli",
+        "--target-dir",
+        str(cargo_target_dir(build_dir)),
     ]
+    if build_type == "Release":
+        command.append("--release")
 
-    try:
-        run_command(command, dry_run=dry_run)
-    except subprocess.CalledProcessError as error:
-        if dry_run or not generator_mismatch_detected(error):
-            raise
+    run_command(command, dry_run=dry_run)
 
-        print(
-            f"Detected a CMake generator mismatch in '{build_dir}'. "
-            "Cleaning generator-specific metadata and retrying.",
-            flush=True,
+
+def install_project(build_dir: Path, install_prefix: Path, build_type: str, dry_run: bool) -> None:
+    del build_dir
+    command = [
+        "cargo",
+        "install",
+        "--path",
+        str(ROOT_DIR / "rust/crates/shell-cli"),
+        "--root",
+        str(install_prefix),
+        "--force",
+    ]
+    if build_type == "Release":
+        command.extend(["--profile", "release"])
+
+    run_command(command, dry_run=dry_run)
+
+    ags_destination = install_prefix / "share/pro-desk-shell/ags"
+    if ags_destination.exists():
+        print(f"+ rm -rf {ags_destination}")
+        if not dry_run:
+            shutil.rmtree(ags_destination)
+    copy_tree_contents(AGS_DIR, ags_destination, dry_run=dry_run)
+
+
+def run_shell(build_dir: Path, build_type: str, dry_run: bool) -> None:
+    if ags_binary() is None:
+        raise RuntimeError(
+            "AGS CLI is not available on PATH. Install AGS first, then retry `./devsh run`."
         )
-        clean_build_metadata(build_dir, dry_run=dry_run)
-        run_command(command, dry_run=dry_run)
 
+    gjs = gjs_binary()
+    if gjs is None:
+        raise RuntimeError("gjs is not available on PATH. Install gjs first.")
 
-def build_project(build_dir: Path, dry_run: bool) -> None:
-    run_command(["cmake", "--build", str(build_dir)], dry_run=dry_run)
+    if not AGS_LAUNCHER_SCRIPT.exists():
+        raise RuntimeError(
+            f"AGS launcher script is missing at '{AGS_LAUNCHER_SCRIPT}'."
+        )
 
+    if not AGS_CONFIG_ENTRY.exists():
+        raise RuntimeError(f"AGS config entry is missing at '{AGS_CONFIG_ENTRY}'.")
 
-def install_project(build_dir: Path, dry_run: bool) -> None:
-    run_command(["cmake", "--install", str(build_dir)], dry_run=dry_run)
+    cli_binary = shell_cli_binary_path(build_dir, build_type)
+    if not dry_run and not cli_binary.exists():
+        raise RuntimeError(
+            f"Rust shell bridge binary '{cli_binary}' is missing. Run `./devsh build` first."
+        )
 
+    if not dry_run and not hyprland_socket_present():
+        raise RuntimeError(
+            "Hyprland runtime socket is not available. Start a Hyprland session "
+            "and retry `./devsh run`."
+        )
 
-def run_binary(build_dir: Path, dry_run: bool) -> None:
-    binary_path = build_dir / "pro-desk-shell"
-    run_command([str(binary_path)], dry_run=dry_run)
-
-
-def generator_mismatch_detected(error: subprocess.CalledProcessError) -> bool:
-    return error.returncode != 0
-
-
-def requested_cmake_generator() -> str | None:
-    value = os.environ.get("CMAKE_GENERATOR", "").strip()
-    return value or None
-
-
-def cached_cmake_generator(build_dir: Path) -> str | None:
-    cache_path = build_dir / "CMakeCache.txt"
-    if not cache_path.exists():
-        return None
-
-    for raw_line in cache_path.read_text(encoding="utf-8").splitlines():
-        if raw_line.startswith("CMAKE_GENERATOR:INTERNAL="):
-            return raw_line.split("=", 1)[1].strip() or None
-
-    return None
-
-
-def clean_build_metadata(build_dir: Path, *, dry_run: bool) -> None:
-    paths_to_remove = (
-        build_dir / "CMakeCache.txt",
-        build_dir / "CMakeFiles",
-        build_dir / ".cmake",
-        build_dir / "_deps",
+    run_command(
+        [gjs, "-m", str(AGS_LAUNCHER_SCRIPT)],
+        dry_run=dry_run,
+        env={
+            "PRO_DESK_SHELL_CLI": str(cli_binary),
+            "PRO_DESK_SHELL_ROOT": str(ROOT_DIR),
+            "PRO_DESK_SHELL_AGS_ARGS": f"-c {shlex.quote(str(AGS_CONFIG_ENTRY))}",
+        },
     )
-
-    for path in paths_to_remove:
-        if not path.exists():
-            continue
-
-        print(f"+ rm -rf {path}", flush=True)
-        if dry_run:
-            continue
-
-        if path.is_dir():
-            shutil.rmtree(path)
-        else:
-            path.unlink()
-
-
-def ensure_compatible_build_dir(build_dir: Path, *, dry_run: bool) -> None:
-    requested = requested_cmake_generator()
-    cached = cached_cmake_generator(build_dir)
-
-    if requested is None or cached is None or requested == cached:
-        return
-
-    print(
-        f"Detected cached CMake generator '{cached}' but current environment requests "
-        f"'{requested}'. Cleaning build metadata in '{build_dir}'.",
-        flush=True,
-    )
-    clean_build_metadata(build_dir, dry_run=dry_run)
 
 
 def install_dependencies(
@@ -256,7 +281,16 @@ def install_dependencies(
     assume_yes: bool,
     dry_run: bool,
 ) -> None:
-    command = dependency_install_command(platform, assume_yes=assume_yes)
+    adapter = resolve_adapter(platform)
+    try:
+        package_group = package_group_for(adapter.family)
+    except UnsupportedPlatformError:
+        package_group = PackageGroup(build=(), runtime=())
+
+    for command in adapter.pre_install_commands(package_group, assume_yes):
+        run_command(command, dry_run=dry_run)
+
+    command = adapter.install_dependencies_command(package_group, assume_yes)
     run_command(command, dry_run=dry_run)
 
 
@@ -282,21 +316,23 @@ def update_checkout(dry_run: bool) -> None:
     run_command(["git", "pull", "--ff-only"], dry_run=dry_run)
 
 
-def layer_shell_build_support_present(
-    search_roots: tuple[Path, ...] = (Path("/usr"), Path("/usr/local")),
-) -> bool:
-    candidate_suffixes = (
-        Path("lib64/cmake/LayerShellQt/LayerShellQtConfig.cmake"),
-        Path("lib/cmake/LayerShellQt/LayerShellQtConfig.cmake"),
-        Path("lib64/cmake/layershellqt/layershellqt-config.cmake"),
-        Path("lib/cmake/layershellqt/layershellqt-config.cmake"),
+def ags_runtime_support_present() -> bool:
+    return ags_binary() is not None
+
+
+def girepository_typelib_present() -> bool:
+    search_roots = (
+        Path("/usr/lib64/girepository-1.0"),
+        Path("/usr/lib/girepository-1.0"),
+    )
+    candidates = (
+        "GIRepository-2.0.typelib",
+        "GIRepository-3.0.typelib",
     )
 
     for root in search_roots:
-        for suffix in candidate_suffixes:
-            if (root / suffix).exists():
-                return True
-
+        if any((root / candidate).exists() for candidate in candidates):
+            return True
     return False
 
 
@@ -313,11 +349,16 @@ def hyprland_socket_present() -> bool:
 def print_doctor_report(platform: DetectedPlatform) -> int:
     checks = (
         ("wayland-session", bool(os.environ.get("WAYLAND_DISPLAY"))),
-        ("cmake", shutil.which("cmake") is not None),
         ("cargo", shutil.which("cargo") is not None),
         ("rustc", shutil.which("rustc") is not None),
-        ("qmake6", shutil.which("qmake6") is not None or shutil.which("qmake-qt6") is not None),
-        ("layer-shell-cmake-package", layer_shell_build_support_present()),
+        ("ags", ags_runtime_support_present()),
+        ("gjs", shutil.which("gjs") is not None),
+        ("girepository-typelib", girepository_typelib_present()),
+        ("npm", shutil.which("npm") is not None),
+        ("meson", shutil.which("meson") is not None),
+        ("ninja", shutil.which("ninja") is not None),
+        ("go", shutil.which("go") is not None),
+        ("gtk-layer-shell", pkg_config_has("gtk-layer-shell-0")),
         ("hyprland-socket", hyprland_socket_present()),
         ("playerctl", shutil.which("playerctl") is not None),
         ("wpctl", shutil.which("wpctl") is not None),
@@ -334,7 +375,15 @@ def print_doctor_report(platform: DetectedPlatform) -> int:
         status = "ok" if ok else "missing"
         print(f"[{status}] {name}")
 
-    critical_names = {"cmake", "cargo", "rustc", "qmake6", "layer-shell-cmake-package"}
+    critical_names = {
+        "cargo",
+        "rustc",
+        "ags",
+        "gjs",
+        "girepository-typelib",
+        "gtk-layer-shell",
+        "hyprland-socket",
+    }
     critical_failures = [name for name, ok in checks if name in critical_names and not ok]
     return 1 if critical_failures else 0
 
@@ -348,13 +397,13 @@ def build_parser() -> argparse.ArgumentParser:
             "--build-dir",
             type=Path,
             default=DEFAULT_BUILD_DIR,
-            help="Build directory to use for cmake.",
+            help="Build directory to use for the Rust shell bridge target output.",
         )
         command_parser.add_argument(
             "--prefix",
             type=Path,
             default=DEFAULT_INSTALL_PREFIX,
-            help="Install prefix used by cmake --install.",
+            help="Install prefix used for cargo install and AGS asset staging.",
         )
         command_parser.add_argument(
             "--dry-run",
@@ -365,10 +414,10 @@ def build_parser() -> argparse.ArgumentParser:
             "--build-type",
             default=DEFAULT_BUILD_TYPE,
             choices=("Debug", "Release", "RelWithDebInfo", "MinSizeRel"),
-            help="CMake build type to configure.",
+            help="Build profile. Release maps to cargo --release; other values use debug profile.",
         )
 
-    install_parser = subparsers.add_parser("install", help="Install dependencies, build, and install.")
+    install_parser = subparsers.add_parser("install", help="Install dependencies, build, and install the AGS shell.")
     add_common_flags(install_parser)
     install_parser.add_argument("--yes", action="store_true", help="Pass non-interactive approval flags.")
     install_parser.add_argument(
@@ -382,18 +431,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Install system dependencies only, without configuring, building, or installing the project.",
     )
 
-    build_parser_cmd = subparsers.add_parser("build", help="Configure and build the project.")
+    build_parser_cmd = subparsers.add_parser("build", help="Build the Rust shell bridge used by the AGS frontend.")
     add_common_flags(build_parser_cmd)
 
-    run_parser = subparsers.add_parser("run", help="Build and run the shell binary.")
+    run_parser = subparsers.add_parser("run", help="Build the shell bridge and run the AGS frontend.")
     add_common_flags(run_parser)
     run_parser.add_argument(
         "--skip-build",
         action="store_true",
-        help="Run the built binary without rebuilding first.",
+        help="Run AGS with the existing shell bridge binary without rebuilding first.",
     )
 
-    update_parser = subparsers.add_parser("update", help="Update the checkout and reinstall.")
+    update_parser = subparsers.add_parser("update", help="Update the checkout and rebuild the AGS-based shell.")
     add_common_flags(update_parser)
     update_parser.add_argument("--yes", action="store_true", help="Pass non-interactive approval flags.")
     update_parser.add_argument(
@@ -444,47 +493,47 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.command == "doctor":
-        platform = detect_platform(args.os_release)
-        return print_doctor_report(platform)
+    try:
+        if args.command == "doctor":
+            platform = detect_platform(args.os_release)
+            return print_doctor_report(platform)
 
-    if args.command == "install-hyprland":
-        install_hyprland_assets(args.hyprland_dir, args.bin_dir, dry_run=args.dry_run)
-        return 0
-
-    platform = detect_platform()
-
-    if args.command == "install":
-        if not args.skip_deps:
-            install_dependencies(platform, assume_yes=args.yes, dry_run=args.dry_run)
-        if args.deps_only:
+        if args.command == "install-hyprland":
+            install_hyprland_assets(args.hyprland_dir, args.bin_dir, dry_run=args.dry_run)
             return 0
-        configure_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
-        build_project(args.build_dir, args.dry_run)
-        install_project(args.build_dir, args.dry_run)
-        return 0
 
-    if args.command == "build":
-        configure_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
-        build_project(args.build_dir, args.dry_run)
-        return 0
+        platform = detect_platform()
 
-    if args.command == "run":
-        if not args.skip_build:
-            configure_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
-            build_project(args.build_dir, args.dry_run)
-        run_binary(args.build_dir, args.dry_run)
-        return 0
+        if args.command == "install":
+            if not args.skip_deps:
+                install_dependencies(platform, assume_yes=args.yes, dry_run=args.dry_run)
+            if args.deps_only:
+                return 0
+            build_project(args.build_dir, args.build_type, args.dry_run)
+            install_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
+            return 0
 
-    if args.command == "update":
-        if not args.skip_pull:
-            update_checkout(args.dry_run)
-        if not args.skip_deps:
-            install_dependencies(platform, assume_yes=args.yes, dry_run=args.dry_run)
-        configure_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
-        build_project(args.build_dir, args.dry_run)
-        install_project(args.build_dir, args.dry_run)
-        return 0
+        if args.command == "build":
+            build_project(args.build_dir, args.build_type, args.dry_run)
+            return 0
+
+        if args.command == "run":
+            if not args.skip_build:
+                build_project(args.build_dir, args.build_type, args.dry_run)
+            run_shell(args.build_dir, args.build_type, args.dry_run)
+            return 0
+
+        if args.command == "update":
+            if not args.skip_pull:
+                update_checkout(args.dry_run)
+            if not args.skip_deps:
+                install_dependencies(platform, assume_yes=args.yes, dry_run=args.dry_run)
+            build_project(args.build_dir, args.build_type, args.dry_run)
+            install_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
+            return 0
+    except RuntimeError as error:
+        print(error, file=sys.stderr)
+        return 1
 
     parser.error(f"Unsupported command: {args.command}")
     return 2

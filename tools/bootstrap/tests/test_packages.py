@@ -1,6 +1,5 @@
 import unittest
 from pathlib import Path
-import tempfile
 from unittest import mock
 
 from tools.bootstrap.packages.linux import (
@@ -9,23 +8,25 @@ from tools.bootstrap.packages.linux import (
     package_group_for,
 )
 from tools.bootstrap.main import (
+    ags_runtime_support_present,
     build_parser,
     dependency_install_command,
-    layer_shell_build_support_present,
     subprocess_environment,
 )
+from tools.bootstrap.platforms.fedora import FedoraAdapter
 from tools.bootstrap.platforms.base import DetectedPlatform
 
 
 class PackageResolutionTests(unittest.TestCase):
-    def test_fedora_group_contains_qt_and_layer_shell_packages(self) -> None:
+    def test_fedora_group_contains_ags_and_gtk_shell_packages(self) -> None:
         group = package_group_for("fedora")
 
         self.assertIsInstance(group, PackageGroup)
         self.assertIn("git", group.build)
-        self.assertIn("qt6-qtbase-private-devel", group.build)
-        self.assertIn("layer-shell-qt-devel", group.build)
-        self.assertIn("qt6-qtwayland", group.runtime)
+        self.assertIn("gtk-layer-shell-devel", group.build)
+        self.assertIn("gobject-introspection-devel", group.build)
+        self.assertIn("aylurs-gtk-shell", group.runtime)
+        self.assertIn("gjs", group.runtime)
         self.assertIn("playerctl", group.runtime)
         self.assertIn("brightnessctl", group.runtime)
         self.assertIn("hyprland", group.optional)
@@ -34,20 +35,12 @@ class PackageResolutionTests(unittest.TestCase):
         with self.assertRaises(UnsupportedPlatformError):
             package_group_for("arch")
 
-    def test_layer_shell_build_support_requires_cmake_config(self) -> None:
-        with tempfile.TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
-            system_prefix = root / "usr"
-            cmake_dir = system_prefix / "lib64/cmake/LayerShellQt"
-            cmake_dir.mkdir(parents=True)
+    def test_ags_runtime_support_checks_path(self) -> None:
+        with mock.patch("tools.bootstrap.main.shutil.which", return_value="/usr/bin/ags"):
+            self.assertTrue(ags_runtime_support_present())
 
-            self.assertFalse(
-                layer_shell_build_support_present(search_roots=(root / "missing",))
-            )
-
-            config_path = cmake_dir / "LayerShellQtConfig.cmake"
-            config_path.write_text("", encoding="utf-8")
-            self.assertTrue(layer_shell_build_support_present(search_roots=(system_prefix,)))
+        with mock.patch("tools.bootstrap.main.shutil.which", return_value=None):
+            self.assertFalse(ags_runtime_support_present())
 
     def test_arch_install_path_raises_adapter_specific_message(self) -> None:
         with self.assertRaisesRegex(UnsupportedPlatformError, "Arch support is scaffolded"):
@@ -105,6 +98,16 @@ class PackageResolutionTests(unittest.TestCase):
                 )
 
         self.assertEqual(command[:3], ["dnf", "install", "-y"])
+
+    def test_fedora_pre_install_enables_ags_copr(self) -> None:
+        group = package_group_for("fedora")
+        adapter = FedoraAdapter()
+
+        with mock.patch("tools.bootstrap.platforms.fedora.os.geteuid", return_value=1000):
+            with mock.patch("tools.bootstrap.platforms.fedora.shutil.which", return_value=None):
+                commands = adapter.pre_install_commands(group, assume_yes=True)
+
+        self.assertEqual(commands, [["dnf", "copr", "enable", "-y", "solopasha/hyprland"]])
 
 
 if __name__ == "__main__":

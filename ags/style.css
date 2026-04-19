@@ -1,0 +1,183 @@
+@define-color shell_bg rgba(243, 247, 253, 0.92);
+@define-color shell_bg_strong rgba(249, 252, 255, 0.95);
+@define-color shell_border rgba(255, 255, 255, 0.75);
+@define-color shell_text #162135;
+@define-color shell_subtle #6f7f98;
+@define-color shell_soft #8794a8;
+@define-color shell_accent #4ec9f6;
+@define-color shell_accent_soft rgba(78, 201, 246, 0.18);
+
+* {
+  font-family: "SF Pro Display", "Aptos", "Cantarell", sans-serif;
+}
+
+.shell-root {
+  background: transparent;
+}
+
+.shell-surface {
+  background: @shell_bg;
+  border: 1px solid @shell_border;
+  border-radius: 24px;
+  color: @shell_text;
+  box-shadow: 0 18px 45px rgba(18, 27, 42, 0.15);
+}
+
+.top-bar {
+  padding: 10px 16px;
+  border-radius: 22px;
+}
+
+.top-bar.compact {
+  padding: 6px 12px;
+}
+
+.dock-surface {
+  padding: 12px 18px;
+  border-radius: 28px;
+}
+
+.overlay-backdrop {
+  background: linear-gradient(
+    175deg,
+    rgba(226, 236, 247, 0.62),
+    rgba(212, 225, 241, 0.54)
+  );
+}
+
+.overlay-card {
+  min-width: 520px;
+  padding: 22px;
+  border-radius: 28px;
+}
+
+.panel-surface {
+  min-width: 360px;
+  padding: 18px;
+  border-radius: 28px;
+}
+
+.workspace-card {
+  min-width: 260px;
+  padding: 16px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(216, 225, 238, 0.9);
+}
+
+.workspace-card.active {
+  border-color: rgba(78, 201, 246, 0.95);
+  background: rgba(247, 252, 255, 0.92);
+}
+
+.window-card {
+  padding: 14px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(220, 229, 240, 0.94);
+}
+
+.window-card.focused {
+  border-color: rgba(78, 201, 246, 0.95);
+}
+
+.dock-item,
+.shell-button,
+.result-button,
+.chip-button {
+  background: @shell_bg_strong;
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  border-radius: 18px;
+  color: @shell_text;
+  padding: 0;
+}
+
+.shell-button.accent,
+.result-button.accent {
+  background: @shell_accent;
+  color: white;
+}
+
+.dock-item {
+  min-width: 68px;
+  min-height: 74px;
+  padding: 8px;
+}
+
+.dock-item.active {
+  background: @shell_accent_soft;
+  border-color: rgba(78, 201, 246, 0.85);
+}
+
+.app-icon {
+  min-width: 42px;
+  min-height: 42px;
+  border-radius: 16px;
+  background: @shell_accent_soft;
+  color: @shell_text;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.app-icon.active {
+  background: @shell_accent;
+  color: white;
+}
+
+.pill {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(223, 231, 243, 0.9);
+}
+
+.muted {
+  color: @shell_subtle;
+}
+
+.soft {
+  color: @shell_soft;
+}
+
+.title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.subtitle {
+  font-size: 11px;
+}
+
+.search-entry {
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(217, 228, 245, 0.95);
+}
+
+.result-button {
+  padding: 14px;
+  border-radius: 20px;
+}
+
+.metric-card {
+  padding: 14px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(222, 230, 242, 0.94);
+}
+
+.status-line {
+  font-size: 11px;
+  color: #8390a4;
+}
+
+entry.search-entry {
+  color: @shell_text;
+}
+
+label {
+  color: @shell_text;
+}

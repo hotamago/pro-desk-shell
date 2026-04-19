@@ -4,22 +4,25 @@
 
 This document tells AI coding agents how to work effectively in `pro-desk-shell`.
 
-The goal is not just to "make it work", but to keep the codebase:
+The codebase is no longer a Qt/QML shell. The frontend is now AGS-based.
+
+The goal is not just to "make it work", but to keep the project:
 
 - architecturally clean
 - easy to scale
 - easy to test
 - easy to review
 - low in duplication
-- consistent with existing project boundaries
+- consistent with the current AGS + Rust boundaries
 
-This repository is a Linux desktop shell, Fedora-first, Hyprland-oriented, built with:
+## Current Stack
 
-- `C++17` + `Qt6` for app bootstrap and `layer-shell-qt`
-- `QML` for UI composition and presentation
-- `Rust` for domain logic, state, parsing, runtime adapters, and the QML bridge
-- `Python` for bootstrap/install/build orchestration via `./devsh`
-- `CMake` as the top-level build entrypoint
+The repository is a Linux desktop shell, Fedora-first and Hyprland-oriented, built with:
+
+- `AGS` for shell windows, composition, and interaction flow
+- `GJS` + `GTK3` for the runtime frontend layer
+- `Rust` for domain logic, config, parsing, state modeling, and Hyprland/system adapters
+- `Python` for bootstrap/install/build/run orchestration via `./devsh`
 
 ## Read This Before Coding
 
@@ -30,76 +33,54 @@ Before making changes, read at least:
 3. `docs/contributing.md`
 4. The files directly related to the task
 
-If the task touches shell runtime UI, also read:
+If the task touches the frontend shell:
 
-- `qml/App.qml`
-- `rust/crates/shell-ui-bridge/src/shell_state.rs`
+- `ags/config.js`
+- `rust/crates/shell-cli/src/main.rs`
 - `rust/crates/shell-hyprland/src/lib.rs`
 - `rust/crates/shell-core/src/*.rs`
 
-If the task touches build/bootstrap/dev workflow, also read:
+If the task touches build/bootstrap/dev workflow:
 
-- `CMakeLists.txt`
 - `tools/bootstrap/main.py`
 - `tools/bootstrap/platforms/*.py`
 - `tools/bootstrap/packages/linux.py`
 
-Do not start with assumptions when the current code already shows the intended boundary.
+Do not start from assumptions when the current code already shows the intended boundary.
 
 ## Architecture Summary
 
 Current data flow is intentionally layered:
 
-1. `cpp/` starts the Qt application and QML engine.
-2. `shell-ui-bridge` exposes Rust-backed state into QML through `cxx-qt`.
-3. `shell-ui-bridge` consumes runtime snapshots from `shell-hyprland`.
-4. `shell-hyprland` talks to Hyprland IPC and system CLI tools.
+1. `ags/` renders shell windows and UI states.
+2. `ags/` calls `shell-cli` for snapshots and actions.
+3. `shell-cli` exposes a narrow JSON/action bridge.
+4. `shell-hyprland` talks to Hyprland IPC and system tools.
 5. `shell-core` owns pure domain logic, config, state, reducers, parsers, and path helpers.
-6. `qml/` renders the UI and triggers narrow, explicit actions exposed by the bridge.
 
-Critical rule: `QML` must not become the business logic layer.
+Critical rule: AGS must not become the business logic layer.
 
 ## Layer Boundaries
 
-### `cpp/`
+### `ags/`
 
-Use `cpp/` only for:
+Use `ags/` for:
 
-- `QGuiApplication`
-- `QQmlApplicationEngine`
-- `layer-shell-qt`
-- root window setup
-- thin startup wiring
+- window composition
+- CSS styling
+- UI-only state
+- interaction flow
+- invoking explicit CLI actions
 
 Do not put these here:
 
-- shell state logic
 - Hyprland parsing
-- config persistence
-- domain rules
-
-If code does not need direct ownership of Qt window/bootstrap lifecycle, it probably belongs in Rust.
-
-### `qml/`
-
-Use `qml/` for:
-
-- layout
-- visual composition
-- presentation-only state
-- animation
-- bindings
-- invoking explicitly exposed bridge actions
-
-Do not put these here:
-
-- system command parsing
-- complex business logic
-- compositor/runtime integration rules
 - config persistence rules
-- Hyprland-specific data processing
+- desktop-entry parsing
+- app search ranking rules
+- shell business logic that should live in Rust
 
-QML should behave like a view/presentation layer, not a hidden backend.
+AGS should behave like a view/presentation layer, not a hidden backend.
 
 ### `rust/crates/shell-core/`
 
@@ -114,9 +95,9 @@ Use `shell-core` for:
 - parsers from raw text to domain data
 - path helpers
 - domain state structs
-- logic that should be easy to unit test
+- search and ranking logic
 
-Do not couple this crate to Qt, QML, or transport-specific Hyprland wiring unless there is a very strong reason.
+Do not couple this crate to AGS, GJS, GTK, or transport-specific Hyprland wiring unless there is a very strong reason.
 
 ### `rust/crates/shell-hyprland/`
 
@@ -130,26 +111,25 @@ Use `shell-hyprland` for:
 - system tool integration
 - runtime snapshot assembly from external systems
 
-Do not turn this crate into a UI state layer or a Qt bridge layer.
+Do not turn this crate into a UI state layer.
 
-### `rust/crates/shell-ui-bridge/`
+### `rust/crates/shell-cli/`
 
-This is the only bridge between Rust and QML.
+This is the only frontend bridge between Rust and AGS.
 
-Use `shell-ui-bridge` for:
+Use `shell-cli` for:
 
-- `cxx-qt`
-- QML-visible objects and properties
-- mapping domain/runtime state into QML-facing values
-- narrow invokables from UI into Rust
+- JSON snapshots for the frontend
+- narrow shell action commands
+- light config mutation commands
 
 Do not use this crate for:
 
 - large business rules
 - duplicated parsers from `shell-core`
-- broad runtime integration logic
+- broad runtime integration logic that belongs in `shell-hyprland`
 
-Hard rule: if logic can live in `shell-core`, it should not live in the bridge.
+Hard rule: if logic can live in `shell-core`, it should not live in the CLI bridge.
 
 ### `tools/bootstrap/`
 
@@ -158,6 +138,7 @@ Use bootstrap tooling for:
 - platform detection
 - dependency installation
 - build/run/update/install orchestration
+- AGS runtime checks
 - future distro extension points
 
 Do not mix shell runtime logic into bootstrap code.
@@ -170,13 +151,11 @@ When adding logic, ask these questions in order:
    Put it in `shell-core`.
 2. Does it depend on Hyprland or system tools?
    Put it in `shell-hyprland`.
-3. Is it only about exposing state/actions to QML?
-   Put it in `shell-ui-bridge`.
+3. Is it only about exposing state/actions to AGS?
+   Put it in `shell-cli`.
 4. Is it only presentation or UI composition?
-   Put it in `qml/`.
-5. Is it only about app/window bootstrap?
-   Put it in `cpp/`.
-6. Is it only about install/build/dev workflow?
+   Put it in `ags/`.
+5. Is it only about install/build/dev workflow?
    Put it in `tools/bootstrap/`.
 
 If a change blurs boundaries, stop and refactor toward thin adapters and a stronger domain layer.
@@ -185,42 +164,16 @@ If a change blurs boundaries, stop and refactor toward thin adapters and a stron
 
 ### SOLID in this repository
 
-#### Single Responsibility
-
 - Each file, struct, component, and adapter should have one main reason to change.
-- Avoid "god objects" that read config, call system tools, format UI strings, and mutate state all in one place.
-
-#### Open/Closed
-
 - Prefer extension through new helpers, adapters, reducers, or components.
-- Avoid broad edits across unrelated layers for a small feature when a clean seam can be added instead.
-
-#### Liskov Substitution
-
-- If you introduce abstractions, implementations must keep the contract predictable.
-- Do not create generic APIs with surprising special-case behavior.
-
-#### Interface Segregation
-
 - Keep bridge APIs small.
-- Expose only the properties and invokables QML actually needs.
-
-#### Dependency Inversion
-
 - Domain logic should not depend on UI frameworks.
-- Adapters should depend on domain types, not the reverse.
 
 ### DRY, KISS, YAGNI
 
 - Do not duplicate parsers, mappings, command builders, or style tokens.
-- Extract helpers when repetition is meaningful, not prematurely.
 - Prefer readable code over clever code.
 - Do not introduce future-facing abstractions without a real present need.
-
-### Composition Over Inheritance
-
-- In QML, prefer reusable components.
-- In Rust and Python, prefer small modules/helpers/composition over deep hierarchies.
 
 ## General Coding Standards
 
@@ -232,16 +185,14 @@ Always:
 - return or log actionable error messages with context
 - keep defaults intentional
 - avoid new dependencies unless clearly justified
-- avoid touching generated or build output unless explicitly required
 
 Never:
 
-- move complex business logic into QML JavaScript
+- move complex business logic into AGS frontend code
 - duplicate domain mapping across crates
-- let the bridge become a second domain layer
+- let the CLI bridge become a second domain layer
 - scatter hardcoded system commands across the codebase
 - create vague buckets like `helpers`, `misc`, or `common` without domain meaning
-- add abstraction just to make the code look "enterprise"
 
 ## Language-Specific Guidance
 
@@ -258,51 +209,34 @@ Prefer:
 Do:
 
 - push pure logic into `shell-core`
-- split parsing/mapping helpers into named functions when it improves clarity
-- use constructors/helpers where they reduce scattered state assembly
-- add tests when behavior changes
+- keep adapter code in `shell-hyprland`
+- keep AGS-facing JSON/action glue in `shell-cli`
 
 Do not:
 
 - mix IO, parsing, mapping, formatting, and mutation in one long function
-- invent traits/enums too early without clear multiple-use justification
-- keep reusable logic trapped in `shell-ui-bridge`
+- invent traits or abstractions too early
 
-### QML
+### AGS / JavaScript
 
 Prefer:
 
 - small components
-- simple bindings
-- reusable style primitives
-- consistency with existing `ShellTheme`, `SurfaceCard`, buttons, and fields
+- simple reactive state
+- reusable CSS classes
+- keeping GTK widget trees readable
 
 Do:
 
-- keep inline JavaScript minimal
-- extract repeated UI patterns into components
-- use `required property` where appropriate
-- reuse current fonts, colors, and tokens when possible
+- keep shell data loading behind the CLI bridge
+- keep AGS-specific logic local to windows/components
+- use CSS for visual consistency
 
 Do not:
 
-- build complex branching behavior in QML JavaScript
-- hardcode a large new set of unrelated visual tokens when shared ones already exist
-- create giant multi-concern QML files
-
-### C++
-
-Keep it thin and practical.
-
-Do:
-
-- limit changes to startup, engine wiring, and layer-shell integration
-- keep QML load failures and bootstrap errors explicit
-
-Do not:
-
-- move domain logic into `cpp/`
-- use C++ as a dumping ground just because Qt already exists there
+- reimplement Rust logic in frontend JavaScript when a Rust seam already exists
+- build giant all-knowing frontend modules if a component split makes things clearer
+- hide shell behavior in ad-hoc subprocess strings everywhere
 
 ### Python
 
@@ -310,63 +244,42 @@ Prefer:
 
 - explicit flow
 - predictable subprocess handling
-- pure helpers where practical
 - clean platform adapter separation
 
 Do:
 
-- extend distro support via package maps and adapters
+- extend distro support via adapter logic and package maps
 - add unit tests in `tools/bootstrap/tests/`
-- keep CLI behavior obvious and stable
 
 Do not:
 
 - rely on clever shell tricks
 - pile unrelated branching into the main entrypoint
-- spread platform logic around the repo outside the adapter model
 
 ## Feature Growth Rules
 
 When adding a feature, prefer this sequence:
 
 1. Add or refine domain data in `shell-core`
-2. Add pure parsing/transformation/reducer logic in `shell-core`
+2. Add pure parsing/transformation logic in `shell-core`
 3. Add runtime integration in `shell-hyprland`
-4. Expose the smallest necessary API in `shell-ui-bridge`
-5. Render and compose it in `qml/`
+4. Expose the smallest necessary API in `shell-cli`
+5. Render and compose it in `ags/`
 
-Do not start from the UI and force architecture downward unless the task is an intentionally tiny prototype. Even then, keep the upgrade path clean.
-
-## Reuse Rules
-
-The goal is less code and better reuse, not abstraction for its own sake.
-
-Good places to reuse:
-
-- parser patterns
-- snapshot mapping patterns
-- reusable UI cards/buttons/fields
-- subprocess/platform command construction
-- validation/checklist flow
-
-Do not force reuse when:
-
-- the semantics are different even if the shape looks similar
-- the abstraction makes naming weaker
-- the helper makes call sites harder to read
+Do not start from the UI and force architecture downward unless the task is intentionally tiny.
 
 ## State, Config, and Side Effects
 
 ### Config
 
-- Persistent config currently lives at `~/.config/pro-desk-shell/config.json`
+- Persistent config lives at `~/.config/pro-desk-shell/config.json`
 - Config changes should go through explicit models and persistence paths
-- UI code should not write config files directly
+- Frontend code should not write config files directly
 
 ### Runtime State
 
-- Runtime state currently lives under `~/.local/state/pro-desk-shell`
-- A mailbox action flow already exists; reuse it instead of inventing cross-layer command paths without a strong reason
+- Runtime state lives under `~/.local/state/pro-desk-shell`
+- Prefer explicit CLI actions and Rust-side persistence over ad-hoc frontend side effects
 
 ### Side Effects
 
@@ -380,15 +293,12 @@ Before finishing a task, run as much of this set as the environment supports:
 ```bash
 python3 -m unittest discover -s tools/bootstrap/tests
 CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo test --manifest-path rust/Cargo.toml
-CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo build --manifest-path rust/Cargo.toml -p shell_ui_bridge
+CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo build --manifest-path rust/Cargo.toml -p shell_cli
 ./devsh build
+./devsh doctor
 ```
 
-If the task is documentation-only, at minimum verify:
-
-- the markdown is clear
-- the content matches the current repository architecture
-- it does not contradict `README.md` or `docs/`
+If AGS runtime dependencies are not installed locally, say so clearly when reporting verification.
 
 ## Pre-Edit Checklist
 
@@ -396,7 +306,7 @@ If the task is documentation-only, at minimum verify:
 - Read the directly related files
 - Check whether an existing helper/component/function already solves part of the problem
 - Understand the current data flow
-- Avoid touching `build/`, `rust/target/`, or `__pycache__/` unless explicitly required
+- Avoid touching generated or build output unless explicitly required
 
 ## Pre-Finish Checklist
 
@@ -411,12 +321,10 @@ If the task is documentation-only, at minimum verify:
 
 ## Anti-Patterns To Avoid
 
-- QML directly calling shell commands
-- bridge code parsing raw command output that belongs in `shell-core` or `shell-hyprland`
-- Hyprland-specific shapes leaking widely into QML
-- duplicated domain logic across `shell-core`, `shell-hyprland`, and `shell-ui-bridge`
+- AGS directly parsing raw shell command output that belongs in Rust
+- Hyprland-specific shapes leaking all over the frontend
+- duplicated domain logic across `shell-core`, `shell-hyprland`, and `shell-cli`
 - small features requiring edits across too many layers because APIs were left vague
-- files that load state, mutate UI flags, persist config, and format display strings all together without separation
 
 ## Documentation Expectations
 
@@ -429,4 +337,4 @@ When adding a meaningful new module, integration, or architectural flow, update 
 
 ## One-Sentence Rule
 
-Keep `cpp` thin, keep `QML` presentational, keep `shell-ui-bridge` as a bridge, keep `shell-hyprland` as the runtime adapter, and push real logic into `shell-core` whenever possible.
+Keep AGS presentational, keep `shell-cli` thin, keep `shell-hyprland` as the runtime adapter, and push real logic into `shell-core` whenever possible.

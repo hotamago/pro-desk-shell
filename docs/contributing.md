@@ -4,7 +4,7 @@
 
 Thanks for helping build Pro Desk Shell.
 
-The project is still early, which means contributors can shape both the architecture and the day-to-day developer experience. The codebase is intentionally small right now, but it already has clear boundaries between UI, Qt bootstrap code, Rust domain logic, and bootstrap automation. Keeping those seams clean is one of the most important ways to help the project scale.
+The project is still early, which means contributors can shape both the architecture and the day-to-day developer experience. The codebase is intentionally small right now, but it already has clear boundaries between the AGS frontend, Rust domain logic, Hyprland integration, and bootstrap automation. Keeping those seams clean is one of the most important ways to help the project scale.
 
 ## Provenance and licensing
 
@@ -42,7 +42,6 @@ Useful commands:
 ./devsh build
 ./devsh build --build-type Release --build-dir build-release
 ./devsh run
-PRO_DESK_SHELL_USE_LAYER_SHELL=1 ./devsh run
 ./devsh update --yes
 ./devsh install-hyprland
 ```
@@ -61,20 +60,21 @@ cargo test --manifest-path rust/Cargo.toml
 
 Keeping code in the right layer matters more than adding code quickly.
 
-### `qml/`
+### `ags/`
 
-Use QML for:
+Use AGS for:
 
-- layout
+- shell windows
 - visual composition
-- bindings
+- GTK widget wiring
+- CSS-driven presentation
 - UI states that are purely presentational
 
 Avoid:
 
-- business logic in QML JavaScript
-- compositor-specific logic
-- shell state mutation rules that belong in Rust
+- Hyprland parsing in frontend JavaScript
+- config persistence rules that belong in Rust
+- turning AGS into the source of truth for shell data
 
 ### `rust/crates/shell-core/`
 
@@ -93,26 +93,15 @@ Use `shell-hyprland` for:
 - compositor-specific mapping into generic shell state
 - shell-critical runtime adapters used by the top bar and quick settings surfaces
 
-### `rust/crates/shell-ui-bridge/`
+### `rust/crates/shell-cli/`
 
-Use `shell-ui-bridge` for:
+Use `shell-cli` for:
 
-- exposing Rust state to QML
-- `cxx-qt` bridge types
-- Qt-facing glue code only
+- exposing Rust state to AGS as JSON
+- narrow action commands the frontend can invoke
+- keeping the frontend bridge thin and explicit
 
 Try not to move core domain logic here.
-
-### `cpp/`
-
-Use `cpp/` for:
-
-- `QGuiApplication` startup
-- `QQmlApplicationEngine` ownership
-- `layer-shell-qt` integration
-- root window configuration
-
-Keep this layer thin. If something can live in Rust or QML without leaking platform/bootstrap concerns, it usually should.
 
 ### `tools/bootstrap/`
 
@@ -145,11 +134,11 @@ If you add a new distro, prefer extending the adapter and package data model ins
 - Add unit tests when changing domain behavior.
 - Avoid coupling new crates directly to Qt unless there is a strong reason.
 
-### QML
+### AGS / JavaScript
 
 - Build components, not one giant file.
-- Keep state readable and bindings simple.
-- Preserve the rule that QML is primarily for composition and presentation.
+- Keep state readable and frontend logic narrow.
+- Preserve the rule that AGS is primarily for composition, styling, and interaction flow.
 
 ## Pull requests
 
@@ -194,9 +183,9 @@ Examples of high-value contributions:
 
 - improve shell state modeling in `shell-core`
 - add more automated tests for the bootstrap CLI
-- improve desktop shell UX in QML
-- wire real Hyprland data into the bridge
-- expand the mailbox and keybind path into richer shell control APIs
+- improve desktop shell UX in AGS
+- wire richer shell data into the CLI bridge
+- expand the AGS request/action path into richer shell control APIs
 - add or finish distro adapters
 - tighten packaging and release automation
 
@@ -218,6 +207,6 @@ For build issues, `./devsh doctor` output is especially helpful.
 Early architecture discussions are welcome. If you are unsure where a feature belongs, open the conversation before adding a lot of code. That is especially helpful for:
 
 - new cross-platform abstractions
-- QML to Rust boundary changes
+- AGS to Rust boundary changes
 - new release/distribution strategies
 - compositor-specific integrations

@@ -17,6 +17,13 @@ class PlatformAdapter(ABC):
     def matches(self, platform: DetectedPlatform) -> bool:
         raise NotImplementedError
 
+    def pre_install_commands(
+        self,
+        package_group: PackageGroup,
+        assume_yes: bool,
+    ) -> list[list[str]]:
+        return []
+
     @abstractmethod
     def install_dependencies_command(
         self,

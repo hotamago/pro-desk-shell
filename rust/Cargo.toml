@@ -2,11 +2,12 @@
 members = [
     "crates/shell-core",
     "crates/shell-hyprland",
-    "crates/shell-ui-bridge",
+    "crates/shell-cli",
 ]
 default-members = [
     "crates/shell-core",
     "crates/shell-hyprland",
+    "crates/shell-cli",
 ]
 resolver = "2"
 

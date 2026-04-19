@@ -1,51 +1,37 @@
 # Pro Desk Shell
 
-Pro Desk Shell is a Fedora-first Hyprland desktop shell built with `Qt6`, `QML`, `CMake`, `layer-shell-qt`, and `Rust`.
-The repository now includes a rewritten shell foundation aimed at a real desktop-shell experience: a menu bar, dock, Spotlight-style launcher, Control Center, Notification Center, and Mission Control-style workspace overview backed by a Rust bridge.
+Pro Desk Shell is a Fedora-first Hyprland desktop shell built with `AGS`, `GJS`, `GTK3`, and `Rust`.
 
-The architecture stays intentionally split:
+The current direction is a hard pivot away from Qt/QML. The shell frontend now lives in `ags/`, while Rust remains the source of truth for app indexing, runtime snapshots, config, Hyprland integration, and shell actions.
 
-- `cpp/` owns Qt startup and `layer-shell-qt` window configuration
-- `qml/` owns surface composition and presentation
-- `rust/crates/shell-core/` owns config, shell state, actions, XDG paths, and pure parsers
-- `rust/crates/shell-hyprland/` owns Hyprland IPC plus shell-critical runtime adapters
-- `rust/crates/shell-ui-bridge/` owns the `cxx-qt` seam exposed to QML
-- `tools/bootstrap/` owns package installation and managed Hyprland asset installation
+## Architecture
+
+- `ags/` owns shell presentation, windows, CSS styling, and local interaction flow
+- `rust/crates/shell-core/` owns config, shell models, reducers, parsing, and search
+- `rust/crates/shell-hyprland/` owns Hyprland IPC, desktop-entry scanning, app launch, and system adapters
+- `rust/crates/shell-cli/` owns the JSON/action bridge that AGS calls
+- `tools/bootstrap/` owns dependency installation, Rust bridge build/run flow, and Hyprland asset installation
 
 ## Status
 
 Current shell work includes:
 
-- a macOS-inspired shell core rebuilt locally in this repo
+- top bar, dock, launcher, right-side control/notification panel, and overview in AGS
 - persisted config at `~/.config/pro-desk-shell/config.json`
-- runtime state at `~/.local/state/pro-desk-shell`
-- Hyprland snapshot loading for workspaces and active window state
-- XDG desktop-entry indexing for app search and launch
-- a mailbox-based action bridge for Hyprland keybind dispatch
-- managed Hyprland fragments installable through `./devsh install-hyprland`
+- Hyprland-backed runtime snapshots with preview fallback
+- XDG desktop-entry indexing and real app launch
+- Hyprland dispatch helper compatible with the AGS frontend
 
 Current limitations:
 
-- the shell is still v1 and does not yet implement every planned desktop feature
-- Mission Control currently uses window metadata cards rather than live thumbnails
-- several long-tail services remain deferred, including clipboard history, OCR/screen tools, AI/chat, weather, wallpaper services, and tray hosting
+- AGS runtime dependencies must be installed through `./devsh install` on Fedora
+- the frontend is early and still needs more polish, motion, and deeper service integrations
+- Mission Control still uses metadata cards rather than live thumbnails
 - Fedora is the only fully implemented bootstrap target today
 
-## Getting started
+## Getting Started
 
-### Prerequisites
-
-You need a Linux environment with:
-
-- `python3`
-- `cmake`
-- `cargo` and `rustc`
-- a Qt6 development toolchain
-- `layer-shell-qt` development files
-
-On Fedora, the bootstrap CLI can install the shell-critical packages for you.
-
-### Useful commands
+Useful commands:
 
 ```bash
 ./devsh doctor
@@ -58,21 +44,27 @@ On Fedora, the bootstrap CLI can install the shell-critical packages for you.
 ./devsh install-hyprland
 ```
 
-### Running the shell
+`./devsh build` builds the Rust shell bridge binary.
 
-Developer window mode:
+`./devsh run` launches the AGS frontend with that Rust bridge injected through environment variables.
 
-```bash
-./devsh run
-```
+## Dependencies
 
-Layer-shell mode:
+You need a Linux environment with:
 
-```bash
-PRO_DESK_SHELL_USE_LAYER_SHELL=1 ./devsh run
-```
+- `python3`
+- `cargo` and `rustc`
+- `ags`
+- `gjs`
+- `meson`
+- `ninja`
+- `npm`
+- `go`
+- GTK layer-shell runtime support
 
-### Installing managed Hyprland fragments
+On Fedora, `./devsh install --yes` enables the AGS COPR and installs the shell-critical packages.
+
+## Hyprland Integration
 
 ```bash
 ./devsh install-hyprland
@@ -87,46 +79,33 @@ Then source `~/.config/hypr/pro-desk-shell/main.conf` from your main Hyprland co
 
 ## Verification
 
-Current verification commands:
-
 ```bash
 python3 -m unittest discover -s tools/bootstrap/tests
 CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo test --manifest-path rust/Cargo.toml
-CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo build --manifest-path rust/Cargo.toml -p shell_ui_bridge
+CARGO_TARGET_DIR=/tmp/pro-desk-shell-cargo-test cargo build --manifest-path rust/Cargo.toml -p shell_cli
 ./devsh build
 ```
 
-`cargo test` still uses `default-members`, so it exercises the pure-Rust crates first. The bridge crate should be verified with a targeted build or the full CMake path.
+`./devsh run` additionally requires a Hyprland session plus AGS, GJS, and GTK layer-shell runtime support to be available on the host.
 
-## Repository layout
+## Repository Layout
 
 ```text
 .
-├── .github/workflows/
-├── cpp/
+├── ags/
 ├── docs/
-├── qml/
 ├── rust/
 │   └── crates/
+│       ├── shell-cli/
 │       ├── shell-core/
-│       ├── shell-hyprland/
-│       └── shell-ui-bridge/
+│       └── shell-hyprland/
 ├── tools/bootstrap/
-├── CMakeLists.txt
 └── devsh
 ```
 
 ## Contributing
 
-Contributions are welcome around:
-
-- Hyprland IPC hardening
-- richer shell services and desktop integrations
-- QML surface polish and animation work
-- Fedora packaging and release automation
-- distro adapter work beyond Fedora
-
-Start with [Contributor Guide](./docs/contributing.md), [Bootstrap Architecture](./docs/architecture/bootstrap.md), and the shell continuation docs in [`docs/plan.md`](./docs/plan.md), [`docs/todo.md`](./docs/todo.md), and [`docs/timeline.md`](./docs/timeline.md).
+Start with [Contributor Guide](./docs/contributing.md), [Bootstrap Architecture](./docs/architecture/bootstrap.md), and the continuation docs in [`docs/plan.md`](./docs/plan.md), [`docs/todo.md`](./docs/todo.md), and [`docs/timeline.md`](./docs/timeline.md).
 
 ## License
 

@@ -2,33 +2,23 @@
 
 ## Goals
 
-- Keep the first scaffold small but build-oriented.
-- Preserve clean seams between Wayland windowing, Rust logic, and QML UI.
+- Keep the shell bootstrap small and developer-friendly.
+- Preserve clean seams between the AGS frontend, Rust logic, and Hyprland integration.
 - Make the install/update path easy for users now and extensible for more distros later.
 
 ## Layer breakdown
 
-### C++ bootstrap
+### AGS frontend
 
-`cpp/` owns:
+`ags/` owns:
 
-- `QGuiApplication`
-- `QQmlApplicationEngine`
-- `layer-shell-qt` activation
-- root window configuration
+- shell windows
+- GTK composition
+- CSS styling
+- overlay interaction flow
+- invoking the Rust CLI bridge for snapshots and actions
 
-This layer stays intentionally thin so Wayland protocol specifics do not leak into QML or core Rust crates.
-
-### QML UI
-
-`qml/` owns:
-
-- visual composition
-- layout
-- bindings
-- component structure
-
-It should not own business logic or system integration logic.
+It should stay presentational and interaction-oriented. It should not become the place where Hyprland parsing, config rules, or desktop-entry logic live.
 
 ### Rust domain crates
 
@@ -42,12 +32,12 @@ It should not own business logic or system integration logic.
 - Hyprland-specific data mapping into generic shell state
 - shell-critical system adapters used by the top bar and quick settings surfaces
 
-`rust/crates/shell-ui-bridge/` is the only crate allowed to depend directly on `cxx-qt`. It converts Rust state into QML-visible `QObject`s and protects the rest of the workspace from Qt coupling.
+`rust/crates/shell-cli/` is the frontend bridge. It exposes JSON snapshots and narrow commands that the AGS frontend can call without pulling UI concerns back into Rust core crates.
 
 ## Bootstrap CLI layout
 
 `tools/bootstrap/main.py` is the single entrypoint used by `./devsh`.
-It now also installs managed Hyprland fragments and the dispatch helper used by the shell mailbox flow.
+It now builds the Rust shell bridge, runs the AGS frontend, installs AGS-oriented dependencies, and installs the managed Hyprland fragments plus dispatch helper.
 
 `tools/bootstrap/packages/` stores declarative package groups.
 
@@ -59,14 +49,14 @@ This split keeps distro growth mostly data-oriented:
 - add or update adapter logic
 - keep build/install orchestration shared
 
-## Why `layer-shell-qt` lives in C++
+## Why AGS owns the shell windows
 
-`layer-shell-qt` is a Qt-side window integration concern. The shell window must be created and configured around `QWindow` / `QQuickWindow` lifecycle, so the natural ownership point is the C++/Qt bootstrap seam. That avoids forcing protocol/windowing concerns through the Rust domain model.
+AGS is the chosen shell presentation layer because it gives the project a faster path for GTK-based shell surfaces and iteration. Window creation, styling, and compositor-facing widget layout belong there, while Rust continues to own the data and action semantics.
 
 ## Current verification scope
 
 - `shell_core` has unit tests for shell state defaults and parser behavior.
 - bootstrap package resolution has Python unit tests.
-- `rust/Cargo.toml` uses `default-members` so plain `cargo test` exercises the pure-Rust crates first.
-- `shell-ui-bridge` should be verified with `cargo build -p shell_ui_bridge` or the CMake build path rather than a Rust test harness.
-- full Qt/CMake build verification depends on host packages such as `Qt6`, `layer-shell-qt`, and a Qt toolchain being installed.
+- `rust/Cargo.toml` uses `default-members` so plain `cargo test` exercises the Rust crates used by the shell.
+- `shell_cli` should be verified with `cargo build -p shell_cli`.
+- AGS runtime verification depends on host packages such as `ags`, `gjs`, and `gtk-layer-shell` being installed, plus an active Hyprland session socket.
