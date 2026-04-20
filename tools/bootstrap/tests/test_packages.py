@@ -1,3 +1,4 @@
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -11,6 +12,8 @@ from tools.bootstrap.main import (
     ags_runtime_support_present,
     build_parser,
     dependency_install_command,
+    ensure_pro_desk_shell_hyprland_source,
+    hyprland_user_conf_sources_pro_desk_shell,
     subprocess_environment,
 )
 from tools.bootstrap.platforms.fedora import FedoraAdapter
@@ -82,12 +85,53 @@ class PackageResolutionTests(unittest.TestCase):
                 "/tmp/hypr/pro-desk-shell",
                 "--bin-dir",
                 "/tmp/bin",
+                "--hyprland-user-conf",
+                "/tmp/hyprland.conf",
+                "--no-hypr-conf",
             ]
         )
 
         self.assertEqual(args.command, "install-hyprland")
         self.assertEqual(args.hyprland_dir, Path("/tmp/hypr/pro-desk-shell"))
         self.assertEqual(args.bin_dir, Path("/tmp/bin"))
+        self.assertEqual(args.hyprland_user_conf, Path("/tmp/hyprland.conf"))
+        self.assertTrue(args.no_hypr_conf)
+
+    def test_oneshot_install_parser_accepts_flags(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                "oneshot-install",
+                "--yes",
+                "--hyprland-user-conf",
+                "/tmp/hyprland.conf",
+                "--no-hypr-conf",
+            ]
+        )
+
+        self.assertEqual(args.command, "oneshot-install")
+        self.assertTrue(args.yes)
+        self.assertEqual(args.hyprland_user_conf, Path("/tmp/hyprland.conf"))
+        self.assertTrue(args.no_hypr_conf)
+
+    def test_hyprland_user_conf_sources_pro_desk_shell_detects_source_line(self) -> None:
+        self.assertTrue(
+            hyprland_user_conf_sources_pro_desk_shell(
+                "bind = SUPER, return, exec, kitty\n"
+                "source = ~/.config/hypr/pro-desk-shell/main.conf\n"
+            )
+        )
+        self.assertFalse(hyprland_user_conf_sources_pro_desk_shell("# source = something\n"))
+        self.assertFalse(hyprland_user_conf_sources_pro_desk_shell(""))
+
+    def test_ensure_pro_desk_shell_hyprland_source_creates_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "hypr" / "hyprland.conf"
+            ensure_pro_desk_shell_hyprland_source(path, dry_run=False)
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("pro-desk-shell/main.conf", text)
+            ensure_pro_desk_shell_hyprland_source(path, dry_run=False)
+            self.assertEqual(path.read_text(encoding="utf-8"), text)
 
     def test_fedora_install_command_skips_sudo_when_unavailable(self) -> None:
         with mock.patch("tools.bootstrap.platforms.fedora.os.geteuid", return_value=1000):

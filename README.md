@@ -35,6 +35,7 @@ Useful commands:
 
 ```bash
 ./devsh doctor
+./devsh oneshot-install --yes   # deps + build + install + install-hyprland + hyprland.conf source line
 ./devsh install --yes
 ./devsh install --yes --deps-only
 ./devsh build
@@ -43,6 +44,8 @@ Useful commands:
 ./devsh update --yes
 ./devsh install-hyprland
 ```
+
+`./devsh oneshot-install` runs the same install path as `./devsh install` (when not using `--deps-only`), then copies Hyprland fragments and dispatch helpers, then appends a `source = ~/.config/hypr/pro-desk-shell/main.conf` block to your user `hyprland.conf` if it is not already there (or creates that file if missing). Use `--no-hypr-conf` to skip editing Hyprland config, or `--hyprland-user-conf /path/to/hyprland.conf` if your config lives elsewhere.
 
 `./devsh build` builds the Rust shell bridge binary.
 
@@ -70,12 +73,13 @@ On Fedora, `./devsh install --yes` enables the AGS COPR and installs the shell-c
 ./devsh install-hyprland
 ```
 
+Or use `./devsh oneshot-install --yes` once for a full app install plus the same Hyprland steps.
+
 This installs:
 
 - Hyprland fragments into `~/.config/hypr/pro-desk-shell`
 - the dispatch helper into `~/.local/bin/pro-desk-shell-dispatch`
-
-Then source `~/.config/hypr/pro-desk-shell/main.conf` from your main Hyprland config.
+- appends `source = ~/.config/hypr/pro-desk-shell/main.conf` to your user `hyprland.conf` when missing (use `--no-hypr-conf` to skip, or `--hyprland-user-conf` for a non-default path)
 
 ## Verification
 

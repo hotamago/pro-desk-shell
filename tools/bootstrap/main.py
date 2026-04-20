@@ -346,6 +346,70 @@ def hyprland_socket_present() -> bool:
     return socket_path.exists()
 
 
+def default_hypr_user_config_path() -> Path:
+    config_home = os.environ.get("XDG_CONFIG_HOME")
+    if config_home:
+        return Path(config_home) / "hypr" / "hyprland.conf"
+    return Path.home() / ".config" / "hypr" / "hyprland.conf"
+
+
+def hyprland_user_conf_sources_pro_desk_shell(content: str) -> bool:
+    for raw in content.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        lowered = line.lower()
+        if lowered.startswith("source") and "pro-desk-shell/main.conf" in line:
+            return True
+    return False
+
+
+def ensure_pro_desk_shell_hyprland_source(hyprland_conf: Path, *, dry_run: bool) -> None:
+    marker = "# Pro Desk Shell (./devsh install-hyprland | oneshot-install)"
+    source_line = "source = ~/.config/hypr/pro-desk-shell/main.conf"
+    block = f"\n{marker}\n{source_line}\n"
+
+    if hyprland_conf.exists():
+        text = hyprland_conf.read_text(encoding="utf-8")
+        if hyprland_user_conf_sources_pro_desk_shell(text):
+            print(f"(unchanged) {hyprland_conf} already sources pro-desk-shell main.conf")
+            return
+        if dry_run:
+            print(f"+ append to {hyprland_conf}:{block}")
+            return
+        hyprland_conf.parent.mkdir(parents=True, exist_ok=True)
+        with hyprland_conf.open("a", encoding="utf-8") as handle:
+            if text and not text.endswith("\n"):
+                handle.write("\n")
+            handle.write(block)
+        print(f"+ updated {hyprland_conf}")
+        return
+
+    if dry_run:
+        print(f"+ create {hyprland_conf} with:{block}")
+        return
+
+    hyprland_conf.parent.mkdir(parents=True, exist_ok=True)
+    initial = (
+        "# Hyprland configuration — https://wiki.hypr.land/Configuring/Configuring-Hyprland/\n"
+        f"{marker}\n{source_line}\n"
+    )
+    hyprland_conf.write_text(initial, encoding="utf-8")
+    print(f"+ created {hyprland_conf}")
+
+
+def maybe_ensure_hyprland_user_conf(
+    *,
+    no_hypr_conf: bool,
+    hyprland_user_conf: Path | None,
+    dry_run: bool,
+) -> None:
+    if no_hypr_conf:
+        return
+    conf_path = hyprland_user_conf or default_hypr_user_config_path()
+    ensure_pro_desk_shell_hyprland_source(conf_path, dry_run=dry_run)
+
+
 def print_doctor_report(platform: DetectedPlatform) -> int:
     checks = (
         ("wayland-session", bool(os.environ.get("WAYLAND_DISPLAY"))),
@@ -466,7 +530,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     hyprland_parser = subparsers.add_parser(
         "install-hyprland",
-        help="Install managed Hyprland shell fragments and the dispatch helper.",
+        help="Install Hyprland fragments, dispatch helpers, and add source line to hyprland.conf.",
     )
     hyprland_parser.add_argument(
         "--dry-run",
@@ -485,6 +549,56 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_BIN_DIR,
         help="Destination directory for the Pro Desk Shell dispatch helper.",
     )
+    hyprland_parser.add_argument(
+        "--hyprland-user-conf",
+        type=Path,
+        default=None,
+        help="Hyprland user config to edit (default: $XDG_CONFIG_HOME/hypr/hyprland.conf).",
+    )
+    hyprland_parser.add_argument(
+        "--no-hypr-conf",
+        action="store_true",
+        help="Do not create or edit hyprland.conf (only copy fragments and helpers).",
+    )
+
+    oneshot_parser = subparsers.add_parser(
+        "oneshot-install",
+        help="Full setup: dependencies, build, install, Hyprland assets, and hyprland.conf source line.",
+    )
+    add_common_flags(oneshot_parser)
+    oneshot_parser.add_argument(
+        "--yes",
+        action="store_true",
+        help="Pass non-interactive approval flags for package installs.",
+    )
+    oneshot_parser.add_argument(
+        "--skip-deps",
+        action="store_true",
+        help="Skip the system package installation step.",
+    )
+    oneshot_parser.add_argument(
+        "--hyprland-dir",
+        type=Path,
+        default=DEFAULT_HYPRLAND_DIR,
+        help="Destination directory for managed Hyprland fragments.",
+    )
+    oneshot_parser.add_argument(
+        "--bin-dir",
+        type=Path,
+        default=DEFAULT_BIN_DIR,
+        help="Destination directory for the Pro Desk Shell dispatch helper.",
+    )
+    oneshot_parser.add_argument(
+        "--hyprland-user-conf",
+        type=Path,
+        default=None,
+        help="Hyprland user config to edit (default: $XDG_CONFIG_HOME/hypr/hyprland.conf).",
+    )
+    oneshot_parser.add_argument(
+        "--no-hypr-conf",
+        action="store_true",
+        help="Do not create or edit hyprland.conf (only install binaries and Hyprland assets).",
+    )
 
     return parser
 
@@ -500,6 +614,25 @@ def main(argv: list[str] | None = None) -> int:
 
         if args.command == "install-hyprland":
             install_hyprland_assets(args.hyprland_dir, args.bin_dir, dry_run=args.dry_run)
+            maybe_ensure_hyprland_user_conf(
+                no_hypr_conf=args.no_hypr_conf,
+                hyprland_user_conf=args.hyprland_user_conf,
+                dry_run=args.dry_run,
+            )
+            return 0
+
+        if args.command == "oneshot-install":
+            platform = detect_platform()
+            if not args.skip_deps:
+                install_dependencies(platform, assume_yes=args.yes, dry_run=args.dry_run)
+            build_project(args.build_dir, args.build_type, args.dry_run)
+            install_project(args.build_dir, args.prefix, args.build_type, args.dry_run)
+            install_hyprland_assets(args.hyprland_dir, args.bin_dir, dry_run=args.dry_run)
+            maybe_ensure_hyprland_user_conf(
+                no_hypr_conf=args.no_hypr_conf,
+                hyprland_user_conf=args.hyprland_user_conf,
+                dry_run=args.dry_run,
+            )
             return 0
 
         platform = detect_platform()
